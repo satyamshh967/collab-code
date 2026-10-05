@@ -1,87 +1,75 @@
-# Real-Time Collaborative Coding Platform
+# collab-code 💻⚡
 
-A powerful platform allowing multiple developers to write, edit, and execute code together in real-time.
+> **Real-Time Collaborative Code Editor & Sandboxed Execution Platform.**
 
-![Screenshot Placeholder](https://via.placeholder.com/800x450?text=Collaborative+Coding+Platform)
+[![React](https://img.shields.io/badge/Frontend-React_%2B_Monaco-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
+[![Socket.io](https://img.shields.io/badge/Real--Time-Socket.io-010101?style=flat-square&logo=socket.io&logoColor=white)](https://socket.io/)
+[![Node.js](https://img.shields.io/badge/Backend-Node.js_%2B_Express-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Docker](https://img.shields.io/badge/Sandboxed_Runner-Docker-2496ED?style=flat-square&logo=docker&logoColor=white)](https://docker.com/)
 
-## Features
-- Real-time code collaboration
-- Support for multiple languages (Java, Python, JavaScript)
-- Secure, sandboxed code execution
-- Real-time cursor tracking and presence
-- Syntax highlighting and code formatting
+---
 
-## Tech Stack
-- **Frontend**: React, Monaco Editor
-- **Backend**: Node.js, Express, Socket.io
-- **Execution Service**: Node.js, Dockerode
-- **Containerization**: Docker
+## 📖 Overview
 
-## Architecture
-```mermaid
-graph TD
-    Client[React Client] <-->|Socket.io| Server[Backend Server]
-    Client <-->|HTTP REST| Server
-    Server <-->|HTTP REST| ExecService[Execution Service]
-    ExecService -->|Dockerode API| DockerDaemon[Docker Host]
-    DockerDaemon --> PyCont[Python Sandbox]
-    DockerDaemon --> JavaCont[Java Sandbox]
-    DockerDaemon --> NodeCont[Node Sandbox]
+`collab-code` is a multi-user real-time collaborative development environment. It empowers remote developers to pair-program simultaneously with live cursor tracking, conflict-free document sync, and safe multi-language code execution inside isolated Docker containers.
+
+---
+
+## ✨ Features
+
+- **👥 Real-Time Multi-Cursor Collaboration:** Full live typing synchronization and visual cursor presence powered by **Socket.io**.
+- **💻 Monaco Code Editor:** The same industry-standard code editor engine powering VS Code, supporting syntax highlighting and auto-formatting.
+- **🐳 Sandboxed Code Execution Service:** Microservice (`execution-service/`) that executes untrusted code (Python, JavaScript, Java) in isolated, resource-constrained Docker containers.
+- **🌐 Room-Based Sessions:** Unique shareable room URLs allowing developers to spin up pair-programming spaces on demand.
+
+---
+
+## 🏗️ Architecture
+
+```text
+┌─────────────────┐       WebSocket       ┌──────────────────┐
+│  React Client   │ ◄───────────────────► │  Socket Server   │
+│ (Monaco Editor) │                       │  (Sync Engine)   │
+└─────────────────┘                       └────────┬─────────┘
+                                                   │ HTTP / RPC
+                                                   ▼
+                                          ┌──────────────────┐
+                                          │ Execution Engine │
+                                          │ (Docker Sandbox) │
+                                          └──────────────────┘
 ```
 
-## Getting Started
+---
+
+## 🚀 Getting Started
 
 ### Prerequisites
-- Node.js 18+
-- Docker & Docker Compose
+- **Node.js (v18+)**
+- **Docker** (for secure code execution runner)
 
-### Installation
-1. Clone the repository
-2. Run `npm install` in the respective directories (`client`, `server`, `execution-service`)
-3. Build the runner images:
-   ```bash
-   docker build -t collab-python-runner ./docker/python
-   docker build -t collab-java-runner ./docker/java
-   docker build -t collab-node-runner ./docker/node
-   ```
-
-### Running
-Run via Docker Compose:
+### Running the Services
 ```bash
-cd docker
-docker-compose up --build
+# Clone repository
+git clone https://github.com/satyamshh967/collab-code.git
+cd collab-code
+
+# 1. Start Socket & API Server
+cd server
+npm install
+npm run dev
+
+# 2. Start Execution Service
+cd ../execution-service
+npm install
+npm run dev
+
+# 3. Start Frontend Client
+cd ../client
+npm install
+npm run dev
 ```
 
-## API Documentation
+---
 
-### Execution Service (`:3002`)
-- `POST /execute`
-  - Body: `{ "code": "string", "language": "string", "stdin": "string" }`
-  - Response: `{ "output": "string", "error": "string", "executionTime": number, "exitCode": number }`
-- `GET /health`
-  - Response: `{ "status": "ok" }`
-
-## Socket Events
-- `join-room`: Join a collaboration room
-- `code-change`: Broadcast code edits
-- `cursor-move`: Broadcast cursor position
-- `user-joined` / `user-left`: Presence notifications
-
-## Docker Setup
-The execution service uses Dockerode to spawn lightweight sandboxed containers. Ensure your Docker socket is mounted properly. On Windows, the socket is `//./pipe/docker_engine`. On Linux, it's `/var/run/docker.sock`. Update the `.env` or `docker-compose.yml` if needed.
-
-## Project Structure
-- `/client` - React frontend
-- `/server` - Socket.io and main backend
-- `/execution-service` - Code execution microservice
-- `/docker` - Sandbox images and compose files
-
-## Contributing
-1. Fork the repo
-2. Create your feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a new Pull Request
-
-## License
-MIT License
+## 👤 Author
+- **Satyam Sharma** - [@satyamshh967](https://github.com/satyamshh967)
