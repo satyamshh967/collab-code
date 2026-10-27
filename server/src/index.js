@@ -11,40 +11,66 @@ import roomRoutes from './routes/room.js';
 import executeRoutes from './routes/execute.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { initSocket } from './socket/index.js';
+import { configureSocketAdapter } from './socket/adapter.js';
+import { setupYjsWebSocket } from './yjs/yjsServer.js';
+import { initExecutionEventBridge } from './queue/eventBridge.js';
 
 const app = express();
 const server = http.createServer(app);
 
-// Socket.io setup
+// Socket.io setup with heartbeat pings
 const io = new Server(server, {
   cors: {
-    origin: config.clientUrl,
+    origin: '*',
     methods: ['GET', 'POST']
-  }
+  },
+  pingInterval: 10000,
+  pingTimeout: 5000,
+  transports: ['websocket', 'polling']
 });
+
+// Configure horizontal Redis adapter
+configureSocketAdapter(io);
 
 // Middleware
 app.use(helmet());
-app.use(cors({ origin: config.clientUrl }));
-app.use(express.json());
+app.use(cors({ origin: '*' }));
+app.use(express.json({ limit: '1mb' }));
 app.use(morgan('dev'));
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
+  windowMs: 15 * 60 * 1000,
+  max: 200
 });
 app.use('/api', limiter);
+
+// Pass io to routes so execution events can be broadcast
+app.use((req, res, next) => {
+  req.io = io;
+  next();
+});
 
 // Routes
 app.use('/api/rooms', roomRoutes);
 app.use('/api/execute', executeRoutes);
 
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 // Error handling
 app.use(errorHandler);
 
-// Initialize Socket.io
+// Initialize Socket.io business handlers
 initSocket(io);
+
+// Initialize Yjs WebSocket server for CRDT editing
+setupYjsWebSocket(server);
+
+// Initialize real-time execution event bridge
+initExecutionEventBridge(io);
 
 // Graceful shutdown
 const gracefulShutdown = () => {
@@ -67,3 +93,5 @@ process.on('SIGINT', gracefulShutdown);
 server.listen(config.port, () => {
   console.log(`Server running in ${config.nodeEnv} mode on port ${config.port}`);
 });
+
+export { app, server, io };

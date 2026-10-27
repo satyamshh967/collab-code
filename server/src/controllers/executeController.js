@@ -1,35 +1,66 @@
-import axios from 'axios';
-import { config } from '../config/index.js';
+import { enqueueExecution, getJobStatus } from '../queue/executionQueue.js';
 
-const SUPPORTED_LANGUAGES = ['javascript', 'python', 'java', 'cpp', 'c', 'go', 'rust'];
+const SUPPORTED_LANGUAGES = ['javascript', 'js', 'python', 'py', 'java', 'cpp', 'c', 'go', 'rust'];
 
+/**
+ * Enqueue code execution job asynchronously
+ */
 export const executeCode = async (req, res) => {
   try {
-    const { code, language, roomId } = req.body;
+    const { code, language, stdin = '', roomId = null, userId = null } = req.body;
 
-    if (!SUPPORTED_LANGUAGES.includes(language)) {
-      return res.status(400).json({ error: `Language ${language} is not supported` });
+    if (!code || !language) {
+      return res.status(400).json({ error: 'Code and language are required fields' });
     }
 
-    const response = await axios.post(`${config.executionServiceUrl}/api/execute`, {
+    if (!SUPPORTED_LANGUAGES.includes(language.toLowerCase())) {
+      return res.status(400).json({ error: `Language '${language}' is not supported` });
+    }
+
+    const job = await enqueueExecution({
       code,
-      language,
-      roomId
-    }, {
-      timeout: 30000 // 30 second max
+      language: language.toLowerCase(),
+      stdin,
+      roomId,
+      userId
     });
 
-    res.status(200).json(response.data);
+    // Notify room that execution has been triggered
+    if (req.io && roomId) {
+      req.io.to(roomId).emit('execution:status', {
+        jobId: job.jobId,
+        status: 'queued',
+        language,
+        roomId
+      });
+    }
+
+    return res.status(202).json({
+      jobId: job.jobId,
+      status: job.status,
+      message: 'Code execution job queued successfully'
+    });
   } catch (error) {
-    if (error.code === 'ECONNABORTED') {
-      return res.status(408).json({ error: 'Execution timeout (30s)' });
+    console.error('Execute code error:', error.message);
+    return res.status(500).json({ error: 'Failed to queue code execution' });
+  }
+};
+
+/**
+ * Poll job status and output
+ */
+export const checkJobStatus = async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const status = await getJobStatus(jobId);
+
+    if (!status) {
+      return res.status(404).json({ error: 'Job not found' });
     }
-    
-    if (error.response) {
-      return res.status(error.response.status).json(error.response.data);
-    }
-    
-    console.error('Execution service error:', error.message);
-    res.status(500).json({ error: 'Failed to execute code' });
+
+    return res.status(200).json(status);
+  } catch (error) {
+    console.error('Check job status error:', error.message);
+    return res.status(500).json({ error: 'Failed to retrieve job status' });
   }
 };

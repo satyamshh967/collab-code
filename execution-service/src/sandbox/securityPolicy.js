@@ -5,35 +5,39 @@ export const validateCode = (code, language) => {
     return { valid: false, reason: 'Code exceeds maximum allowed length.' };
   }
 
-  const blockedPatterns = {
+  const lang = (language || '').toLowerCase();
+
+  const rules = {
     python: [
-      'import os',
-      'import subprocess',
-      'import sys',
-      'open(',
-      'eval(',
-      'exec('
+      /\bimport\s+(os|subprocess|sys|shutil|socket|requests|urllib|pty)/i,
+      /\bfrom\s+(os|subprocess|sys|shutil|socket|requests|urllib|pty)\s+import/i,
+      /\bopen\s*\(/i,
+      /\beval\s*\(/i,
+      /\bexec\s*\(/i,
+      /\b__import__\s*\(/i
     ],
     javascript: [
-      'require("child_process")',
-      'require("fs")',
-      'require("os")',
-      'eval('
+      /require\s*\(\s*['"](child_process|fs|os|net|http|https|cluster|v8)['"]\s*\)/i,
+      /import\s+.*\s+from\s+['"](child_process|fs|os|net|http|https|cluster|v8)['"]/i,
+      /\bprocess\.(exit|kill|env|binding|dlopen)\b/i,
+      /\beval\s*\(/i,
+      /\bFunction\s*\(/i
     ],
     java: [
-      'java.lang.Runtime',
-      'java.lang.ProcessBuilder',
-      'java.io.File',
-      'java.nio.file'
+      /Runtime\.getRuntime\s*\(\s*\)/i,
+      /ProcessBuilder/i,
+      /System\.exit/i,
+      /java\.io\.File/i,
+      /java\.nio\.file/i,
+      /java\.net\./i
     ]
   };
 
-  const lang = language.toLowerCase();
-  const patterns = blockedPatterns[lang] || [];
+  const patterns = rules[lang] || [];
 
-  for (const pattern of patterns) {
-    if (code.includes(pattern)) {
-      return { valid: false, reason: `Usage of restricted keyword/pattern: ${pattern}` };
+  for (const regex of patterns) {
+    if (regex.test(code)) {
+      return { valid: false, reason: `Usage of restricted security pattern: ${regex.source}` };
     }
   }
 

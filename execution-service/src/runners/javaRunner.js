@@ -1,35 +1,35 @@
-import { DockerManager } from '../sandbox/dockerManager.js';
-import { v4 as uuidv4 } from 'uuid';
+import { dockerManager } from '../sandbox/dockerManager.js';
+import { runLocalSandbox } from '../sandbox/localRunner.js';
 
-const dockerManager = new DockerManager();
-
-export const executeJava = async (code, stdin) => {
+export const executeJava = async (code, stdin = '', onChunk = null) => {
   const startTime = Date.now();
-  const containerId = `java-runner-${uuidv4()}`;
-  const className = extractClassName(code) || 'Main';
   
   try {
-    // Escape single quotes for shell execution
-    const escapedCode = code.replace(/'/g, "'\\''");
-    
-    // Command to write code, compile, and run
-    const cmd = [
-      'sh', '-c',
-      `echo '${escapedCode}' > ${className}.java && javac ${className}.java && java ${className}`
-    ];
+    const isDocker = await dockerManager.isDockerAvailable();
+    if (isDocker) {
+      const escapedCode = code.replace(/'/g, "'\\''");
+      const cmd = [
+        'sh', '-c',
+        `echo '${escapedCode}' > Main.java && javac Main.java && java Main`
+      ];
 
-    const { output, error, exitCode } = await dockerManager.runInSandbox(
-      'collab-java-runner',
-      cmd,
-      stdin
-    );
+      const { output, error, exitCode } = await dockerManager.runInSandbox(
+        'collab-java-runner',
+        cmd,
+        stdin,
+        onChunk
+      );
 
-    return {
-      output,
-      error,
-      exitCode,
-      executionTime: Date.now() - startTime
-    };
+      return {
+        output,
+        error,
+        exitCode,
+        executionTime: Date.now() - startTime
+      };
+    }
+
+    // Secure local sandbox fallback
+    return await runLocalSandbox('java', code, stdin, onChunk);
   } catch (err) {
     return {
       output: '',
@@ -39,8 +39,3 @@ export const executeJava = async (code, stdin) => {
     };
   }
 };
-
-function extractClassName(code) {
-  const match = code.match(/public\s+class\s+([A-Za-z0-9_]+)/);
-  return match ? match[1] : null;
-}

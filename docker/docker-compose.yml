@@ -1,29 +1,72 @@
 version: '3.8'
 
 services:
-  server:
-    build:
-      context: ../server
+  redis:
+    image: redis:7-alpine
+    container_name: collab-redis
     ports:
-      - "3001:3001"
+      - "6379:6379"
+    restart: unless-stopped
+    command: redis-server --save "" --appendonly no
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     networks:
       - collab-network
 
-  client:
+  server:
     build:
-      context: ../client
+      context: ../server
+    container_name: collab-server
     ports:
-      - "3000:3000"
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - NODE_ENV=production
+      - REDIS_URL=redis://redis:6379
+      - CLIENT_URL=http://localhost:3000
+      - EXECUTION_SERVICE_URL=http://execution-service:3002
+    depends_on:
+      redis:
+        condition: service_healthy
     networks:
       - collab-network
 
   execution-service:
     build:
       context: ../execution-service
+    container_name: collab-execution-service
     ports:
       - "3002:3002"
+    environment:
+      - PORT=3002
+      - REDIS_URL=redis://redis:6379
+      - EXECUTION_TIMEOUT=5000
+      - MAX_MEMORY=128m
+      - MAX_CPU=0.5
+      - DOCKER_SOCKET=/var/run/docker.sock
     volumes:
-      - //./pipe/docker_engine://./pipe/docker_engine
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - collab-network
+
+  client:
+    build:
+      context: ../client
+    container_name: collab-client
+    ports:
+      - "3000:80"
+    environment:
+      - REACT_APP_SERVER_URL=http://localhost:3001
+      - REACT_APP_API_URL=http://localhost:3001/api
+      - REACT_APP_WS_URL=ws://localhost:3001
+    depends_on:
+      - server
     networks:
       - collab-network
 

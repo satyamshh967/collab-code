@@ -1,6 +1,7 @@
 import React, { createContext, useState, useCallback, useEffect, useRef } from 'react';
 import { useSocket } from '../hooks/useSocket';
 import { SOCKET_EVENTS } from '../utils/constants';
+import { api } from '../services/api';
 import toast from 'react-hot-toast';
 
 export const RoomContext = createContext();
@@ -15,8 +16,21 @@ export const RoomProvider = ({ children }) => {
   const [chatMessages, setChatMessages] = useState([]);
   const [snapshots, setSnapshots] = useState([]);
   const [isInterviewRoom, setIsInterviewRoom] = useState(false);
-  const [cursors, setCursors] = useState({});
-  const isRemoteChange = useRef(false);
+  const [currentUser, setCurrentUser] = useState(null);
+
+  // Asynchronous execution streaming state
+  const [executionState, setExecutionState] = useState({
+    jobId: null,
+    status: 'idle', // 'idle' | 'queued' | 'running' | 'completed' | 'failed'
+    output: '',
+    error: '',
+    exitCode: null,
+    executionTime: 0
+  });
+
+  const roomIdRef = useRef(null);
+  const usernameRef = useRef(null);
+  roomIdRef.current = roomId;
 
   useEffect(() => {
     if (!socket) return;
@@ -26,52 +40,40 @@ export const RoomProvider = ({ children }) => {
       setRoomInfo(data);
       setUsers(data.users || []);
       setLanguage(data.language || 'javascript');
-      setCode(data.code || '');
+      if (data.code !== undefined) {
+        setCode(data.code);
+      }
       setIsInterviewRoom(data.isInterviewRoom || false);
-      toast.success(`Joined room: ${data.name}`);
+
+      const foundUser = (data.users || []).find(u => u.socketId === socket.id);
+      if (foundUser) {
+        setCurrentUser(foundUser);
+      }
+      toast.success(`Connected to room: ${data.name}`);
     };
 
     // Users list update
     const handleUsers = (usersList) => {
       setUsers(usersList);
+      const foundUser = usersList.find(u => u.socketId === socket.id);
+      if (foundUser) {
+        setCurrentUser(foundUser);
+      }
     };
 
-    // A user joined
+    // User joined/left toasts
     const handleUserJoined = (user) => {
       toast.success(`${user.username} joined the room`);
     };
 
-    // A user left
     const handleUserLeft = (userId) => {
-      setCursors((prev) => {
-        const next = { ...prev };
-        delete next[userId];
-        return next;
-      });
+      // Handled via room:users
     };
 
-    // Code changed by another user
-    const handleCodeChange = (data) => {
-      isRemoteChange.current = true;
-      setCode(data.code);
-    };
-
-    // Language changed
+    // Language changed by peer
     const handleLanguageChange = (newLanguage) => {
       setLanguage(newLanguage);
-      toast(`Language changed to ${newLanguage}`, { icon: '🔄' });
-    };
-
-    // Cursor updates from other users
-    const handleCursor = (data) => {
-      setCursors((prev) => ({
-        ...prev,
-        [data.userId]: {
-          username: data.username,
-          color: data.color,
-          position: data.cursorPosition,
-        },
-      }));
+      toast(`Language switched to ${newLanguage}`, { icon: '🔄' });
     };
 
     // Chat message received
@@ -85,7 +87,54 @@ export const RoomProvider = ({ children }) => {
       toast.success('Snapshot saved');
     };
 
-    // Error from server
+    // Real-time execution events
+    const handleExecutionStatus = ({ jobId, status }) => {
+      setExecutionState((prev) => ({
+        ...prev,
+        jobId,
+        status,
+        output: status === 'running' ? (prev.output ? prev.output + '\n[Execution started...]\n' : '[Execution started...]\n') : prev.output
+      }));
+    };
+
+    const handleExecutionOutput = ({ jobId, chunk, type }) => {
+      setExecutionState((prev) => ({
+        ...prev,
+        jobId,
+        output: type === 'stderr' ? prev.output : prev.output + chunk,
+        error: type === 'stderr' ? prev.error + chunk : prev.error
+      }));
+    };
+
+    const handleExecutionResult = ({ jobId, status, output, error, exitCode, executionTime }) => {
+      setExecutionState({
+        jobId,
+        status,
+        output: output || '',
+        error: error || '',
+        exitCode: exitCode ?? 0,
+        executionTime: executionTime || 0
+      });
+
+      if (status === 'completed' && exitCode === 0) {
+        toast.success(`Execution completed in ${executionTime || 0}ms`);
+      } else {
+        toast.error(`Execution finished with errors (${exitCode ?? 1})`);
+      }
+    };
+
+    // Graceful socket reconnection handling
+    const handleReconnect = () => {
+      if (roomIdRef.current && usernameRef.current) {
+        console.log('[Socket] Reconnected, re-joining room:', roomIdRef.current);
+        socket.emit(SOCKET_EVENTS.JOIN_ROOM, {
+          roomId: roomIdRef.current,
+          username: usernameRef.current
+        });
+        toast.success('Reconnected to room');
+      }
+    };
+
     const handleError = (data) => {
       toast.error(data.message || 'An error occurred');
     };
@@ -94,29 +143,36 @@ export const RoomProvider = ({ children }) => {
     socket.on(SOCKET_EVENTS.ROOM_USERS, handleUsers);
     socket.on(SOCKET_EVENTS.USER_JOINED, handleUserJoined);
     socket.on(SOCKET_EVENTS.USER_LEFT, handleUserLeft);
-    socket.on(SOCKET_EVENTS.CODE_CHANGE, handleCodeChange);
     socket.on(SOCKET_EVENTS.LANGUAGE_CHANGE, handleLanguageChange);
-    socket.on(SOCKET_EVENTS.CURSOR_CHANGE, handleCursor);
     socket.on(SOCKET_EVENTS.CHAT_MESSAGE, handleChatMessage);
     socket.on(SOCKET_EVENTS.SNAPSHOT_SAVED, handleSnapshotSaved);
     socket.on(SOCKET_EVENTS.ERROR, handleError);
+
+    socket.on('execution:status', handleExecutionStatus);
+    socket.on('execution:output', handleExecutionOutput);
+    socket.on('execution:result', handleExecutionResult);
+    socket.on('reconnect', handleReconnect);
 
     return () => {
       socket.off(SOCKET_EVENTS.ROOM_INFO, handleRoomInfo);
       socket.off(SOCKET_EVENTS.ROOM_USERS, handleUsers);
       socket.off(SOCKET_EVENTS.USER_JOINED, handleUserJoined);
       socket.off(SOCKET_EVENTS.USER_LEFT, handleUserLeft);
-      socket.off(SOCKET_EVENTS.CODE_CHANGE, handleCodeChange);
       socket.off(SOCKET_EVENTS.LANGUAGE_CHANGE, handleLanguageChange);
-      socket.off(SOCKET_EVENTS.CURSOR_CHANGE, handleCursor);
       socket.off(SOCKET_EVENTS.CHAT_MESSAGE, handleChatMessage);
       socket.off(SOCKET_EVENTS.SNAPSHOT_SAVED, handleSnapshotSaved);
       socket.off(SOCKET_EVENTS.ERROR, handleError);
+
+      socket.off('execution:status', handleExecutionStatus);
+      socket.off('execution:output', handleExecutionOutput);
+      socket.off('execution:result', handleExecutionResult);
+      socket.off('reconnect', handleReconnect);
     };
   }, [socket]);
 
   const joinRoom = useCallback((id, username) => {
     setRoomId(id);
+    usernameRef.current = username;
     if (socket) {
       socket.emit(SOCKET_EVENTS.JOIN_ROOM, { roomId: id, username });
     }
@@ -132,26 +188,12 @@ export const RoomProvider = ({ children }) => {
     setCode('');
     setChatMessages([]);
     setSnapshots([]);
-    setCursors({});
+    setCurrentUser(null);
   }, [socket, roomId]);
 
   const updateCode = useCallback((newCode) => {
-    // Don't re-emit if this was a remote change
-    if (isRemoteChange.current) {
-      isRemoteChange.current = false;
-      return;
-    }
     setCode(newCode);
-    if (socket && roomId) {
-      socket.emit(SOCKET_EVENTS.CODE_CHANGE, { roomId, code: newCode });
-    }
-  }, [socket, roomId]);
-
-  const sendCursorPosition = useCallback((cursorPosition) => {
-    if (socket && roomId) {
-      socket.emit(SOCKET_EVENTS.CURSOR_CHANGE, { roomId, cursorPosition });
-    }
-  }, [socket, roomId]);
+  }, []);
 
   const sendMessage = useCallback((text) => {
     if (socket && roomId) {
@@ -178,11 +220,79 @@ export const RoomProvider = ({ children }) => {
     }
   }, [socket, roomId]);
 
+  const runCode = useCallback(async (currentCode, currentLang, stdin = '') => {
+    setExecutionState({
+      jobId: null,
+      status: 'queued',
+      output: 'Queueing execution job in BullMQ...\n',
+      error: '',
+      exitCode: null,
+      executionTime: 0
+    });
+
+    try {
+      const res = await api.executeCode(currentCode, currentLang, roomId, stdin);
+      setExecutionState((prev) => ({
+        ...prev,
+        jobId: res.jobId,
+        status: 'queued',
+        output: `Job enqueued (Job ID: ${res.jobId})\nWaiting for worker...\n`
+      }));
+
+      // Polling fallback in case WebSocket stream is delayed
+      let attempts = 0;
+      const pollTimer = setInterval(async () => {
+        attempts++;
+        if (attempts > 30) {
+          clearInterval(pollTimer);
+          return;
+        }
+
+        try {
+          const statusRes = await api.getExecutionStatus(res.jobId);
+          if (statusRes && (statusRes.status === 'completed' || statusRes.status === 'failed')) {
+            clearInterval(pollTimer);
+            setExecutionState({
+              jobId: res.jobId,
+              status: statusRes.status,
+              output: statusRes.output || '',
+              error: statusRes.error || '',
+              exitCode: statusRes.exitCode ?? 0,
+              executionTime: statusRes.executionTime || 0
+            });
+          }
+        } catch (e) {}
+      }, 1000);
+    } catch (err) {
+      setExecutionState({
+        jobId: null,
+        status: 'failed',
+        output: '',
+        error: err.message || 'Failed to submit execution request',
+        exitCode: -1,
+        executionTime: 0
+      });
+      toast.error(err.message || 'Failed to submit execution request');
+    }
+  }, [roomId]);
+
+  const clearExecutionOutput = useCallback(() => {
+    setExecutionState({
+      jobId: null,
+      status: 'idle',
+      output: '',
+      error: '',
+      exitCode: null,
+      executionTime: 0
+    });
+  }, []);
+
   return (
     <RoomContext.Provider value={{
       roomId, roomInfo, users, language, code, chatMessages, snapshots,
-      isInterviewRoom, cursors,
-      joinRoom, leaveRoom, updateCode, sendCursorPosition,
+      isInterviewRoom, currentUser,
+      executionState, runCode, clearExecutionOutput,
+      joinRoom, leaveRoom, updateCode,
       sendMessage, changeLanguage, saveSnapshot, restoreSnapshot
     }}>
       {children}

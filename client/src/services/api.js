@@ -1,4 +1,4 @@
-const BASE_URL = 'http://localhost:3001/api';
+const BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
 
 export const api = {
   createRoom: async (data) => {
@@ -23,13 +23,21 @@ export const api = {
     if (!res.ok) throw new Error('Failed to fetch room info');
     return res.json();
   },
-  executeCode: async (code, language) => {
+  executeCode: async (code, language, roomId = null, stdin = '') => {
     const res = await fetch(`${BASE_URL}/execute`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code, language })
+      body: JSON.stringify({ code, language, roomId, stdin })
     });
-    if (!res.ok) throw new Error('Failed to execute code');
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Failed to queue code execution');
+    }
+    return res.json();
+  },
+  getExecutionStatus: async (jobId) => {
+    const res = await fetch(`${BASE_URL}/execute/status/${jobId}`);
+    if (!res.ok) throw new Error('Failed to fetch job status');
     return res.json();
   }
 };

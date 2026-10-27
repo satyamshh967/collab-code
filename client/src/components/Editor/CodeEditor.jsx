@@ -1,125 +1,124 @@
-import React, { useRef, useCallback, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import Editor from '@monaco-editor/react';
+import * as Y from 'yjs';
+import { WebsocketProvider } from 'y-websocket';
+import { MonacoBinding } from 'y-monaco';
 import { useRoom } from '../../hooks/useRoom';
 import { EDITOR_OPTIONS, LANGUAGES } from '../../utils/constants';
 
 const CodeEditor = () => {
-  const { code, language, updateCode, sendCursorPosition, cursors } = useRoom();
+  const { roomId, code, language, updateCode, currentUser } = useRoom();
   const editorRef = useRef(null);
-  const monacoRef = useRef(null);
-  const decorationsRef = useRef([]);
-  const isUpdatingRef = useRef(false);
+  const bindingRef = useRef(null);
+  const providerRef = useRef(null);
+  const ydocRef = useRef(null);
+  const [isEditorReady, setIsEditorReady] = useState(false);
+
+  const defaultCode = LANGUAGES.find((l) => l.id === language)?.defaultCode || '';
 
   const handleEditorDidMount = (editor, monaco) => {
     editorRef.current = editor;
-    monacoRef.current = monaco;
-
-    // Track cursor position changes
-    editor.onDidChangeCursorPosition((e) => {
-      if (sendCursorPosition) {
-        sendCursorPosition({
-          lineNumber: e.position.lineNumber,
-          column: e.position.column,
-        });
-      }
-    });
+    setIsEditorReady(true);
   };
 
-  const handleEditorChange = useCallback((value) => {
-    if (!isUpdatingRef.current) {
-      updateCode(value);
-    }
-  }, [updateCode]);
-
-  // Update remote cursors as Monaco decorations
+  // Setup Yjs CRDT Provider & Monaco Binding
   useEffect(() => {
+    if (!isEditorReady || !editorRef.current || !roomId) return;
+
     const editor = editorRef.current;
-    const monaco = monacoRef.current;
-    if (!editor || !monaco || !cursors) return;
+    const model = editor.getModel();
+    if (!model) return;
 
-    const newDecorations = [];
+    // Destroy existing binding/provider if roomId changed
+    if (bindingRef.current) {
+      bindingRef.current.destroy();
+      bindingRef.current = null;
+    }
+    if (providerRef.current) {
+      providerRef.current.destroy();
+      providerRef.current = null;
+    }
+    if (ydocRef.current) {
+      ydocRef.current.destroy();
+      ydocRef.current = null;
+    }
 
-    Object.entries(cursors).forEach(([userId, cursor]) => {
-      if (!cursor.position) return;
+    const ydoc = new Y.Doc();
+    ydocRef.current = ydoc;
 
-      const { lineNumber, column } = cursor.position;
-      const { username, color } = cursor;
+    const serverHttpUrl = process.env.REACT_APP_SERVER_URL || 'http://localhost:3001';
+    const wsUrl = serverHttpUrl.replace(/^http/, 'ws') + '/yjs';
 
-      // Create a CSS class dynamically for this user's cursor color
-      const className = `remote-cursor-${userId.replace(/[^a-zA-Z0-9]/g, '')}`;
-      const labelClassName = `remote-cursor-label-${userId.replace(/[^a-zA-Z0-9]/g, '')}`;
+    const provider = new WebsocketProvider(wsUrl, roomId, ydoc, {
+      connect: true
+    });
+    providerRef.current = provider;
 
-      // Inject style if it doesn't exist
-      if (!document.getElementById(className)) {
-        const style = document.createElement('style');
-        style.id = className;
-        style.textContent = `
-          .${className} {
-            background: ${color};
-            width: 2px !important;
-            margin-left: -1px;
-          }
-          .${labelClassName} {
-            background: ${color};
-            color: #fff;
-            padding: 1px 6px;
-            border-radius: 3px 3px 3px 0;
-            font-size: 11px;
-            font-weight: bold;
-            white-space: nowrap;
-            position: relative;
-            top: -1.4em;
-          }
-        `;
-        document.head.appendChild(style);
-      }
+    const yText = ydoc.getText('monaco');
 
-      // Cursor line decoration
-      newDecorations.push({
-        range: new monaco.Range(lineNumber, column, lineNumber, column),
-        options: {
-          className: className,
-          stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-        },
-      });
+    // Setup awareness (cursor, selection, username, color)
+    const storedUsername = localStorage.getItem('codecollab_username') || 'Guest';
+    const username = currentUser?.username || storedUsername;
+    const color = currentUser?.color || '#38bdf8';
 
-      // Username label decoration
-      newDecorations.push({
-        range: new monaco.Range(lineNumber, column, lineNumber, column),
-        options: {
-          after: {
-            content: ` ${username}`,
-            inlineClassName: labelClassName,
-          },
-          stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-        },
-      });
+    provider.awareness.setLocalStateField('user', {
+      name: username,
+      color: color
     });
 
-    decorationsRef.current = editor.deltaDecorations(
-      decorationsRef.current,
-      newDecorations
+    // Monaco Yjs Binding
+    const binding = new MonacoBinding(
+      yText,
+      model,
+      new Set([editor]),
+      provider.awareness
     );
-  }, [cursors]);
+    bindingRef.current = binding;
 
-  // Handle remote code changes
-  useEffect(() => {
-    const editor = editorRef.current;
-    if (!editor) return;
-
-    const currentValue = editor.getValue();
-    if (code !== currentValue && code !== undefined) {
-      isUpdatingRef.current = true;
-      const position = editor.getPosition();
-      editor.setValue(code);
-      if (position) {
-        editor.setPosition(position);
+    // Populate initial default code if document is empty
+    provider.on('synced', (isSynced) => {
+      if (isSynced && yText.length === 0 && defaultCode) {
+        ydoc.transact(() => {
+          yText.insert(0, defaultCode);
+        });
       }
-      isUpdatingRef.current = false;
+      updateCode(yText.toString());
+    });
+
+    // Listen to changes in Yjs CRDT doc and update RoomContext code
+    const observer = () => {
+      updateCode(yText.toString());
+    };
+    yText.observe(observer);
+
+    return () => {
+      yText.unobserve(observer);
+      if (bindingRef.current) {
+        bindingRef.current.destroy();
+        bindingRef.current = null;
+      }
+      if (providerRef.current) {
+        providerRef.current.destroy();
+        providerRef.current = null;
+      }
+      if (ydocRef.current) {
+        ydocRef.current.destroy();
+        ydocRef.current = null;
+      }
+    };
+  }, [isEditorReady, roomId, currentUser, defaultCode, updateCode]);
+
+  // Handle external snapshot restore or code updates
+  useEffect(() => {
+    if (!ydocRef.current) return;
+    const yText = ydocRef.current.getText('monaco');
+    if (code !== undefined && code !== yText.toString()) {
+      ydocRef.current.transact(() => {
+        yText.delete(0, yText.length);
+        yText.insert(0, code);
+      });
     }
   }, [code]);
-
-  const defaultCode = LANGUAGES.find((l) => l.id === language)?.defaultCode || '';
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }}>
@@ -128,13 +127,12 @@ const CodeEditor = () => {
         language={language}
         theme="vs-dark"
         defaultValue={defaultCode}
-        onChange={handleEditorChange}
         onMount={handleEditorDidMount}
         options={EDITOR_OPTIONS}
         loading={
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-secondary)' }}>
             <div className="spinner" style={{ marginRight: '0.5rem' }} />
-            Loading Editor...
+            Initializing CRDT Editor...
           </div>
         }
       />

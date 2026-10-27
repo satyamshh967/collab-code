@@ -1,0 +1,12 @@
+{
+  "name": "collab-code",
+  "version": "2.0.0",
+  "description": "Enterprise-grade real-time collaborative coding platform with CRDTs, Redis horizontal scaling, and sandboxed execution",
+  "type": "module",
+  "scripts": {
+    "test": "node --test --test-force-exit tests/crdt-convergence.test.js tests/sandbox-confinement.test.js tests/queue-lifecycle.test.js",
+    "test:crdt": "node --test --test-force-exit tests/crdt-convergence.test.js",
+    "test:sandbox": "node --test --test-force-exit tests/sandbox-confinement.test.js",
+    "test:queue": "node --test --test-force-exit tests/queue-lifecycle.test.js"
+  }
+}

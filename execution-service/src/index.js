@@ -6,6 +6,7 @@ import { executeJava } from './runners/javaRunner.js';
 import { executePython } from './runners/pythonRunner.js';
 import { executeJavascript } from './runners/javascriptRunner.js';
 import { validateCode } from './sandbox/securityPolicy.js';
+import { startExecutionWorker } from './worker/executionWorker.js';
 
 dotenv.config();
 
@@ -14,12 +15,13 @@ const PORT = process.env.PORT || 3002;
 
 app.use(helmet());
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok' });
+  res.status(200).json({ status: 'ok', service: 'execution-service' });
 });
 
+// Direct execution endpoint (fallback / synchronous proxy)
 app.post('/execute', async (req, res) => {
   const { code, language, stdin = '' } = req.body;
 
@@ -27,7 +29,6 @@ app.post('/execute', async (req, res) => {
     return res.status(400).json({ error: 'Code and language are required' });
   }
 
-  // Basic security check
   const securityCheck = validateCode(code, language);
   if (!securityCheck.valid) {
     return res.status(400).json({ error: `Security validation failed: ${securityCheck.reason}` });
@@ -40,6 +41,7 @@ app.post('/execute', async (req, res) => {
         result = await executeJava(code, stdin);
         break;
       case 'python':
+      case 'py':
         result = await executePython(code, stdin);
         break;
       case 'javascript':
@@ -56,6 +58,9 @@ app.post('/execute', async (req, res) => {
     res.status(500).json({ error: 'Internal server error during execution', details: error.message });
   }
 });
+
+// Start BullMQ asynchronous worker
+startExecutionWorker();
 
 app.listen(PORT, () => {
   console.log(`Execution service listening on port ${PORT}`);

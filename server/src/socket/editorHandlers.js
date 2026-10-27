@@ -1,26 +1,15 @@
 import { roomManager } from '../models/Room.js';
 import CodeSnapshot, { snapshotManager } from '../models/CodeSnapshot.js';
 import { userManager } from '../models/User.js';
+import { getDocText, getYDoc } from '../yjs/persistence.js';
 
 export default (io, socket) => {
+  // Fallback for non-Yjs clients or legacy sync
   socket.on('editor:change', ({ roomId, code }) => {
     const room = roomManager.findById(roomId);
     if (room) {
       room.updateCode(code);
       socket.to(roomId).emit('editor:change', { code, socketId: socket.id });
-    }
-  });
-
-  socket.on('editor:cursor', ({ roomId, cursorPosition }) => {
-    const user = userManager.getUser(socket.id);
-    if (user) {
-      user.cursorPosition = cursorPosition;
-      socket.to(roomId).emit('editor:cursor', {
-        userId: user.id,
-        username: user.username,
-        color: user.color,
-        cursorPosition
-      });
     }
   });
 
@@ -32,11 +21,12 @@ export default (io, socket) => {
     }
   });
 
-  socket.on('editor:save-snapshot', ({ roomId, label }) => {
+  socket.on('editor:save-snapshot', async ({ roomId, label }) => {
     const room = roomManager.findById(roomId);
     const user = userManager.getUser(socket.id);
     if (room && user) {
-      const snapshot = new CodeSnapshot(roomId, room.code, room.language, user.username, label);
+      const currentCode = getDocText(roomId) || room.code;
+      const snapshot = new CodeSnapshot(roomId, currentCode, room.language, user.username, label);
       snapshotManager.addSnapshot(snapshot);
       room.addSnapshot(snapshot);
       io.to(roomId).emit('editor:snapshot-saved', snapshot);
@@ -52,22 +42,32 @@ export default (io, socket) => {
     }
   });
 
-  socket.on('editor:restore-snapshot', ({ roomId, snapshotId }) => {
+  socket.on('editor:restore-snapshot', async ({ roomId, snapshotId }) => {
     const room = roomManager.findById(roomId);
     const snapshot = snapshotManager.getSnapshot(roomId, snapshotId);
     
     if (room && snapshot) {
       room.updateCode(snapshot.code);
       room.language = snapshot.language;
-      io.to(roomId).emit('editor:change', { code: snapshot.code });
+
+      // Update Yjs CRDT doc so all connected Monaco editors receive the update
+      const ydoc = await getYDoc(roomId);
+      const yText = ydoc.getText('monaco');
+      ydoc.transact(() => {
+        yText.delete(0, yText.length);
+        yText.insert(0, snapshot.code);
+      });
+
       io.to(roomId).emit('editor:language-change', snapshot.language);
+      io.to(roomId).emit('editor:change', { code: snapshot.code });
     }
   });
 
   socket.on('editor:sync-request', ({ roomId }) => {
     const room = roomManager.findById(roomId);
     if (room) {
-      socket.emit('editor:change', { code: room.code });
+      const currentCode = getDocText(roomId) || room.code;
+      socket.emit('editor:change', { code: currentCode });
     }
   });
 };
