@@ -5,6 +5,7 @@ import { validateRoomCreation, validateJoinRoom } from '../middleware/validation
 const router = express.Router();
 
 router.get('/', getRooms);
+router.post('/', validateRoomCreation, createRoom);
 router.post('/create', validateRoomCreation, createRoom);
 router.get('/:id', getRoom);
 router.post('/:id/join', validateJoinRoom, joinRoom);

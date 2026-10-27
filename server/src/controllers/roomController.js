@@ -19,11 +19,13 @@ export const getRooms = (req, res) => {
 
 export const createRoom = (req, res) => {
   try {
-    const { name, language, isInterviewRoom, interviewConfig } = req.body;
+    const { name, language, isInterview, isInterviewRoom, interviewConfig } = req.body;
+    const isInterviewMode = isInterviewRoom ?? isInterview ?? false;
     const roomId = generateId();
-    const room = roomManager.create(roomId, name, language, isInterviewRoom, interviewConfig);
+    const room = roomManager.create(roomId, name, language, isInterviewMode, interviewConfig);
     
     res.status(201).json({
+      id: room.id,
       roomId: room.id,
       name: room.name,
       language: room.language,

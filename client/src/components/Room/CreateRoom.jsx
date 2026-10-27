@@ -3,23 +3,30 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../../services/api';
 import toast from 'react-hot-toast';
 import { LANGUAGES } from '../../utils/constants';
+import { generateUsername } from '../../utils/helpers';
 
 const CreateRoom = () => {
   const [name, setName] = useState('');
+  const [username, setUsername] = useState(localStorage.getItem('codecollab_username') || generateUsername());
   const [language, setLanguage] = useState('javascript');
   const [isInterview, setIsInterview] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleCreate = async (e) => {
     e.preventDefault();
+    if (!name.trim()) return;
+
+    setIsLoading(true);
     try {
-      const room = await api.createRoom({ name, language, isInterview });
+      localStorage.setItem('codecollab_username', username.trim() || generateUsername());
+      const room = await api.createRoom({ name: name.trim(), language, isInterview });
       toast.success('Room created successfully');
       navigate(`/room/${room.id || room.roomId}`);
     } catch (err) {
-      toast.error('Failed to create room via API, using local mock.');
-      const mockId = Math.random().toString(36).substring(7);
-      navigate(`/room/${mockId}`);
+      toast.error(err.message || 'Failed to create room via API');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -28,6 +35,7 @@ const CreateRoom = () => {
       <h2 style={{ marginTop: 0, color: 'var(--text-primary)' }}>Create Room</h2>
       <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
         <input className="input" placeholder="Room Name" value={name} onChange={e => setName(e.target.value)} required />
+        <input className="input" placeholder="Your Username" value={username} onChange={e => setUsername(e.target.value)} required />
         <select className="input" value={language} onChange={e => setLanguage(e.target.value)}>
           {LANGUAGES.map(lang => <option key={lang.id} value={lang.id}>{lang.name}</option>)}
         </select>
@@ -35,7 +43,9 @@ const CreateRoom = () => {
           <input type="checkbox" checked={isInterview} onChange={e => setIsInterview(e.target.checked)} />
           Interview Mode
         </label>
-        <button type="submit" className="btn" style={{ marginTop: '0.5rem' }}>Create</button>
+        <button type="submit" className="btn" disabled={isLoading} style={{ marginTop: '0.5rem' }}>
+          {isLoading ? 'Creating...' : 'Create'}
+        </button>
       </form>
     </div>
   );

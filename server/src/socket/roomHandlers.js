@@ -9,9 +9,15 @@ const ROOM_CLEANUP_GRACE_PERIOD_MS = 5 * 60 * 1000; // 5 minutes
 
 export default (io, socket) => {
   socket.on('room:join', async ({ roomId, username }) => {
+    if (!roomId) {
+      return socket.emit('error', { message: 'Invalid room ID' });
+    }
+
     let room = roomManager.findById(roomId);
     if (!room) {
-      return socket.emit('error', { message: 'Room not found' });
+      // Auto-create room so direct URL sharing or join-by-code always succeeds seamlessly
+      room = roomManager.create(roomId, `Room ${roomId.slice(0, 8)}`, 'javascript');
+      console.log(`[Room Manager] Auto-created room ${roomId} on peer join`);
     }
 
     // Cancel pending room cleanup if someone joins
@@ -21,10 +27,11 @@ export default (io, socket) => {
       console.log(`[Room Manager] Cancelled cleanup timer for room ${roomId} (peer reconnected)`);
     }
 
+    const effectiveUsername = username || `Guest_${Math.floor(Math.random() * 1000)}`;
     const existingColors = Array.from(room.users.values()).map(u => u.color);
     const color = generateColor(existingColors);
     
-    const user = new User(generateId(), username, color, socket.id, roomId);
+    const user = new User(generateId(), effectiveUsername, color, socket.id, roomId);
     room.addUser(user);
     userManager.addUser(user);
 
@@ -48,7 +55,7 @@ export default (io, socket) => {
     const systemMsg = {
       id: generateId(),
       type: 'system',
-      text: `${username} joined the room`,
+      text: `${effectiveUsername} joined the room`,
       timestamp: formatTimestamp()
     };
     room.addChatMessage(systemMsg);
@@ -85,7 +92,6 @@ export default (io, socket) => {
               if (ydoc) {
                 await persistYDoc(room.id, ydoc);
               }
-              // Mark room as inactive or delete if needed
             }
             roomCleanupTimers.delete(room.id);
           }, ROOM_CLEANUP_GRACE_PERIOD_MS);
