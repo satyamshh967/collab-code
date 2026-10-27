@@ -8,7 +8,6 @@
     "@testing-library/react": "^13.4.0",
     "@testing-library/user-event": "^13.5.0",
     "lucide-react": "^0.263.1",
-    "monaco-editor": "^0.57.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-hot-toast": "^2.4.1",
@@ -17,7 +16,6 @@
     "react-scripts": "5.0.1",
     "socket.io-client": "^4.7.2",
     "web-vitals": "^2.1.4",
-    "y-monaco": "^0.1.6",
     "y-websocket": "^3.1.0",
     "yjs": "^13.6.33"
   },

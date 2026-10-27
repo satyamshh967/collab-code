@@ -8,18 +8,33 @@ import { validateCode } from '../sandbox/securityPolicy.js';
 const QUEUE_NAME = 'code-execution';
 const redisUrl = process.env.REDIS_URL || `redis://${process.env.REDIS_HOST || '127.0.0.1'}:${process.env.REDIS_PORT || 6379}`;
 
-export const startExecutionWorker = () => {
-  let publisher = null;
+export const startExecutionWorker = async () => {
+  // Probe Redis before launching worker
+  let isRedisAvailable = false;
+  try {
+    const probe = new Redis(redisUrl, {
+      maxRetriesPerRequest: 1,
+      retryStrategy: () => null,
+      lazyConnect: true
+    });
+    probe.on('error', () => {});
+    await probe.connect();
+    await probe.ping();
+    isRedisAvailable = true;
+    await probe.quit();
+  } catch (err) {
+    console.warn('⚠️  Redis offline: BullMQ worker idle (direct execution endpoint /execute remains active).');
+    return null;
+  }
 
+  let publisher = null;
   try {
     publisher = new Redis(redisUrl, {
       maxRetriesPerRequest: 1,
-      retryStrategy: (times) => (times > 3 ? null : Math.min(times * 1000, 3000)),
-      enableOfflineQueue: false,
-      lazyConnect: true
+      retryStrategy: () => null,
+      enableOfflineQueue: false
     });
-
-    publisher.connect().catch(() => {});
+    publisher.on('error', () => {});
   } catch (err) {
     console.warn('[Worker] Failed to create Redis publisher:', err.message);
   }
@@ -40,6 +55,7 @@ export const startExecutionWorker = () => {
       maxRetriesPerRequest: null,
       enableOfflineQueue: false
     });
+    connection.on('error', () => {});
 
     const worker = new Worker(
       QUEUE_NAME,

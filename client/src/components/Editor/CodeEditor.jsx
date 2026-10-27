@@ -2,13 +2,14 @@ import React, { useRef, useEffect, useState } from 'react';
 import Editor from '@monaco-editor/react';
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
-import { MonacoBinding } from 'y-monaco';
+import { MonacoBinding } from '../../utils/y-monaco';
 import { useRoom } from '../../hooks/useRoom';
 import { EDITOR_OPTIONS, LANGUAGES } from '../../utils/constants';
 
 const CodeEditor = () => {
   const { roomId, code, language, updateCode, currentUser } = useRoom();
   const editorRef = useRef(null);
+  const monacoRef = useRef(null);
   const bindingRef = useRef(null);
   const providerRef = useRef(null);
   const ydocRef = useRef(null);
@@ -18,14 +19,16 @@ const CodeEditor = () => {
 
   const handleEditorDidMount = (editor, monaco) => {
     editorRef.current = editor;
+    monacoRef.current = monaco;
     setIsEditorReady(true);
   };
 
   // Setup Yjs CRDT Provider & Monaco Binding
   useEffect(() => {
-    if (!isEditorReady || !editorRef.current || !roomId) return;
+    if (!isEditorReady || !editorRef.current || !monacoRef.current || !roomId) return;
 
     const editor = editorRef.current;
+    const monaco = monacoRef.current;
     const model = editor.getModel();
     if (!model) return;
 
@@ -66,12 +69,13 @@ const CodeEditor = () => {
       color: color
     });
 
-    // Monaco Yjs Binding
+    // Monaco Yjs Binding with native monaco instance
     const binding = new MonacoBinding(
       yText,
       model,
       new Set([editor]),
-      provider.awareness
+      provider.awareness,
+      monaco
     );
     bindingRef.current = binding;
 
