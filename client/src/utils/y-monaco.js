@@ -41,6 +41,15 @@ const createMonacoSelectionFromRelativeSelection = (editor, type, relSel, doc, m
     const model = editor.getModel();
     const startPos = model.getPositionAt(start.index);
     const endPos = model.getPositionAt(end.index);
+    if (monaco && monaco.Selection && typeof monaco.Selection.createWithDirection === 'function') {
+      return monaco.Selection.createWithDirection(
+        startPos.lineNumber,
+        startPos.column,
+        endPos.lineNumber,
+        endPos.column,
+        relSel.direction
+      );
+    }
     return new monaco.Selection(
       startPos.lineNumber,
       startPos.column,
@@ -60,10 +69,11 @@ export class MonacoBinding {
     this.monaco = monaco;
     this.awareness = awareness;
     this.mux = createMutex();
+    this._isApplyingRemote = false;
     this._savedSelections = new Map();
     this._decorations = new Map();
 
-    // Preserve selection across remote transactions
+    // Preserve local selection across incoming remote transactions
     this._beforeTransaction = () => {
       this.mux(() => {
         this._savedSelections = new Map();
@@ -195,34 +205,40 @@ export class MonacoBinding {
       });
     };
 
-    // Apply remote CRDT changes to Monaco
+    // Apply remote CRDT changes to Monaco without moving local user's cursor
     this._ytextObserver = (event) => {
-      this.mux(() => {
-        let index = 0;
-        event.delta.forEach((op) => {
-          if (op.retain !== undefined) {
-            index += op.retain;
-          } else if (op.insert !== undefined) {
-            const pos = monacoModel.getPositionAt(index);
-            const range = new this.monaco.Range(pos.lineNumber, pos.column, pos.lineNumber, pos.column);
-            const insert = op.insert;
-            monacoModel.applyEdits([{ range, text: insert }]);
-            index += insert.length;
-          } else if (op.delete !== undefined) {
-            const pos = monacoModel.getPositionAt(index);
-            const endPos = monacoModel.getPositionAt(index + op.delete);
-            const range = new this.monaco.Range(pos.lineNumber, pos.column, endPos.lineNumber, endPos.column);
-            monacoModel.applyEdits([{ range, text: '' }]);
-          }
-        });
+      this._isApplyingRemote = true;
+      try {
+        this.mux(() => {
+          let index = 0;
+          event.delta.forEach((op) => {
+            if (op.retain !== undefined) {
+              index += op.retain;
+            } else if (op.insert !== undefined) {
+              const pos = monacoModel.getPositionAt(index);
+              const range = new this.monaco.Selection(pos.lineNumber, pos.column, pos.lineNumber, pos.column);
+              const insert = op.insert;
+              monacoModel.applyEdits([{ range, text: insert }]);
+              index += insert.length;
+            } else if (op.delete !== undefined) {
+              const pos = monacoModel.getPositionAt(index);
+              const endPos = monacoModel.getPositionAt(index + op.delete);
+              const range = new this.monaco.Selection(pos.lineNumber, pos.column, endPos.lineNumber, endPos.column);
+              monacoModel.applyEdits([{ range, text: '' }]);
+            }
+          });
 
-        this._savedSelections.forEach((rsel, editor) => {
-          const sel = createMonacoSelectionFromRelativeSelection(editor, ytext, rsel, this.doc, this.monaco);
-          if (sel !== null) {
-            editor.setSelection(sel);
-          }
+          // Restore and anchor local user's own cursor selection
+          this._savedSelections.forEach((rsel, editor) => {
+            const sel = createMonacoSelectionFromRelativeSelection(editor, ytext, rsel, this.doc, this.monaco);
+            if (sel !== null) {
+              editor.setSelection(sel);
+            }
+          });
         });
-      });
+      } finally {
+        this._isApplyingRemote = false;
+      }
       this._rerenderDecorations();
     };
     ytext.observe(this._ytextObserver);
@@ -252,6 +268,9 @@ export class MonacoBinding {
     // Capture local cursor/selection changes and broadcast to awareness
     if (awareness) {
       const broadcastSelection = () => {
+        // Prevent broadcasting intermediate cursor jumps while applying remote updates
+        if (this._isApplyingRemote) return;
+
         editors.forEach((editor) => {
           if (editor.getModel() === monacoModel) {
             const sel = editor.getSelection();
@@ -276,8 +295,6 @@ export class MonacoBinding {
 
       editors.forEach((editor) => {
         editor.onDidChangeCursorSelection(broadcastSelection);
-        editor.onDidChangeCursorPosition(broadcastSelection);
-        editor.onDidFocusEditorText(broadcastSelection);
       });
 
       // Broadcast initial cursor position right away

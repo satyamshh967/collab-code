@@ -7,7 +7,7 @@ import { useRoom } from '../../hooks/useRoom';
 import { EDITOR_OPTIONS, LANGUAGES } from '../../utils/constants';
 
 const CodeEditor = () => {
-  const { roomId, code, language, updateCode, currentUser } = useRoom();
+  const { roomId, language, updateCode, currentUser } = useRoom();
   const editorRef = useRef(null);
   const monacoRef = useRef(null);
   const bindingRef = useRef(null);
@@ -93,15 +93,20 @@ const CodeEditor = () => {
       }
     });
 
-    // Listen to changes in Yjs CRDT doc and update RoomContext code
+    // Listen to changes in Yjs CRDT doc and update RoomContext code (debounced)
+    let debounceTimer = null;
     const observer = () => {
-      if (updateCodeRef.current) {
-        updateCodeRef.current(yText.toString());
-      }
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        if (updateCodeRef.current) {
+          updateCodeRef.current(yText.toString());
+        }
+      }, 250);
     };
     yText.observe(observer);
 
     return () => {
+      clearTimeout(debounceTimer);
       yText.unobserve(observer);
       if (provider.awareness) {
         provider.awareness.setLocalState(null);
@@ -131,18 +136,6 @@ const CodeEditor = () => {
       color: currentUser.color || '#38bdf8'
     });
   }, [currentUser]);
-
-  // 3. Handle external snapshot restore or code updates
-  useEffect(() => {
-    if (!ydocRef.current) return;
-    const yText = ydocRef.current.getText('monaco');
-    if (code !== undefined && code !== yText.toString()) {
-      ydocRef.current.transact(() => {
-        yText.delete(0, yText.length);
-        yText.insert(0, code);
-      });
-    }
-  }, [code]);
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }}>
