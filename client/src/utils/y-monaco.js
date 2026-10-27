@@ -58,9 +58,12 @@ export class MonacoBinding {
     this.monacoModel = monacoModel;
     this.editors = editors;
     this.monaco = monaco;
+    this.awareness = awareness;
     this.mux = createMutex();
     this._savedSelections = new Map();
+    this._decorations = new Map();
 
+    // Preserve selection across remote transactions
     this._beforeTransaction = () => {
       this.mux(() => {
         this._savedSelections = new Map();
@@ -76,93 +79,116 @@ export class MonacoBinding {
     };
     this.doc.on('beforeAllTransactions', this._beforeTransaction);
 
-    this._decorations = new Map();
+    // Render remote peer cursors and selections
     this._rerenderDecorations = () => {
       editors.forEach((editor) => {
-        if (awareness && editor.getModel() === monacoModel) {
-          const currentDecorations = this._decorations.get(editor) || [];
-          const newDecorations = [];
-
-          awareness.getStates().forEach((state, clientID) => {
-            if (
-              clientID !== this.doc.clientID &&
-              state.selection != null &&
-              state.selection.anchor != null &&
-              state.selection.head != null
-            ) {
-              const anchorAbs = Y.createAbsolutePositionFromRelativePosition(state.selection.anchor, this.doc);
-              const headAbs = Y.createAbsolutePositionFromRelativePosition(state.selection.head, this.doc);
-
-              if (anchorAbs !== null && headAbs !== null && anchorAbs.type === ytext && headAbs.type === ytext) {
-                let start, end, afterContentClassName, beforeContentClassName;
-                const user = state.user || {};
-                const color = user.color || '#3b82f6';
-                const name = user.name || 'User';
-
-                // Inject user cursor style dynamically
-                const styleId = `y-cursor-${clientID}`;
-                if (!document.getElementById(styleId)) {
-                  const style = document.createElement('style');
-                  style.id = styleId;
-                  style.textContent = `
-                    .yRemoteSelection-${clientID} {
-                      background-color: ${color}33;
-                    }
-                    .yRemoteSelectionHead-${clientID} {
-                      position: absolute;
-                      border-left: 2px solid ${color};
-                      height: 100%;
-                    }
-                    .yRemoteSelectionHead-${clientID}::after {
-                      position: absolute;
-                      content: "${name}";
-                      top: -1.3em;
-                      left: -2px;
-                      font-size: 10px;
-                      font-weight: 600;
-                      color: #fff;
-                      background-color: ${color};
-                      padding: 1px 5px;
-                      border-radius: 3px;
-                      white-space: nowrap;
-                      pointer-events: none;
-                      z-index: 100;
-                    }
-                  `;
-                  document.head.appendChild(style);
-                }
-
-                if (anchorAbs.index < headAbs.index) {
-                  start = monacoModel.getPositionAt(anchorAbs.index);
-                  end = monacoModel.getPositionAt(headAbs.index);
-                  afterContentClassName = `yRemoteSelectionHead yRemoteSelectionHead-${clientID}`;
-                  beforeContentClassName = null;
-                } else {
-                  start = monacoModel.getPositionAt(headAbs.index);
-                  end = monacoModel.getPositionAt(anchorAbs.index);
-                  afterContentClassName = null;
-                  beforeContentClassName = `yRemoteSelectionHead yRemoteSelectionHead-${clientID}`;
-                }
-
-                newDecorations.push({
-                  range: new this.monaco.Range(start.lineNumber, start.column, end.lineNumber, end.column),
-                  options: {
-                    className: `yRemoteSelection yRemoteSelection-${clientID}`,
-                    afterContentClassName,
-                    beforeContentClassName
-                  }
-                });
-              }
-            }
-          });
-
-          this._decorations.set(editor, editor.deltaDecorations(currentDecorations, newDecorations));
-        } else {
+        if (!this.awareness || editor.getModel() !== monacoModel) {
           this._decorations.delete(editor);
+          return;
         }
+
+        const currentDecorations = this._decorations.get(editor) || [];
+        const newDecorations = [];
+        const localClientId = this.awareness.clientID;
+
+        this.awareness.getStates().forEach((state, clientID) => {
+          // Strictly skip local client's own cursor!
+          if (clientID === localClientId || clientID === this.doc.clientID) {
+            return;
+          }
+
+          if (
+            !state ||
+            !state.selection ||
+            state.selection.anchor == null ||
+            state.selection.head == null
+          ) {
+            return;
+          }
+
+          const anchorAbs = Y.createAbsolutePositionFromRelativePosition(state.selection.anchor, this.doc);
+          const headAbs = Y.createAbsolutePositionFromRelativePosition(state.selection.head, this.doc);
+
+          if (anchorAbs !== null && headAbs !== null && anchorAbs.type === ytext && headAbs.type === ytext) {
+            const user = state.user || {};
+            const color = user.color || '#3b82f6';
+            const name = user.name || 'User';
+
+            // Inject CSS styles for remote peer cursor & selection
+            const styleId = `y-cursor-style-${clientID}`;
+            if (!document.getElementById(styleId)) {
+              const style = document.createElement('style');
+              style.id = styleId;
+              style.textContent = `
+                .yRemoteSelection-${clientID} {
+                  background-color: ${color}33 !important;
+                }
+                .yRemoteCursorHead-${clientID} {
+                  border-left: 2px solid ${color} !important;
+                  margin-left: -1px;
+                }
+                .yRemoteCursorLabel-${clientID} {
+                  background-color: ${color} !important;
+                  color: #ffffff !important;
+                  font-size: 10px !important;
+                  font-weight: 600 !important;
+                  padding: 1px 4px !important;
+                  border-radius: 3px !important;
+                  margin-left: 2px !important;
+                  white-space: nowrap !important;
+                  user-select: none !important;
+                  pointer-events: none !important;
+                  vertical-align: top !important;
+                  display: inline-block !important;
+                  line-height: 1.2 !important;
+                  position: relative !important;
+                  top: -0.6em !important;
+                  z-index: 50 !important;
+                }
+              `;
+              document.head.appendChild(style);
+            }
+
+            const posAnchor = monacoModel.getPositionAt(anchorAbs.index);
+            const posHead = monacoModel.getPositionAt(headAbs.index);
+
+            // Remote selection highlight (when text is highlighted)
+            if (anchorAbs.index !== headAbs.index) {
+              const start = anchorAbs.index < headAbs.index ? posAnchor : posHead;
+              const end = anchorAbs.index < headAbs.index ? posHead : posAnchor;
+              newDecorations.push({
+                range: new this.monaco.Range(start.lineNumber, start.column, end.lineNumber, end.column),
+                options: {
+                  className: `yRemoteSelection-${clientID}`,
+                  stickiness: this.monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
+                }
+              });
+            }
+
+            // Remote cursor caret & username badge
+            newDecorations.push({
+              range: new this.monaco.Range(posHead.lineNumber, posHead.column, posHead.lineNumber, posHead.column),
+              options: {
+                className: `yRemoteCursor-${clientID}`,
+                before: {
+                  content: '\uFEFF',
+                  inlineClassName: `yRemoteCursorHead-${clientID}`
+                },
+                after: {
+                  content: ` ${name} `,
+                  inlineClassName: `yRemoteCursorLabel-${clientID}`
+                },
+                stickiness: this.monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
+              }
+            });
+          }
+        });
+
+        this._decorations.set(editor, editor.deltaDecorations(currentDecorations, newDecorations));
       });
     };
 
+    // Apply remote CRDT changes to Monaco
     this._ytextObserver = (event) => {
       this.mux(() => {
         let index = 0;
@@ -194,11 +220,13 @@ export class MonacoBinding {
     };
     ytext.observe(this._ytextObserver);
 
+    // Initial value alignment
     const ytextValue = ytext.toString();
     if (monacoModel.getValue() !== ytextValue) {
       monacoModel.setValue(ytextValue);
     }
 
+    // Capture local typing into Yjs CRDT
     this._monacoChangeHandler = monacoModel.onDidChangeContent((event) => {
       this.mux(() => {
         this.doc.transact(() => {
@@ -214,6 +242,7 @@ export class MonacoBinding {
       this.destroy();
     });
 
+    // Capture local cursor/selection changes and broadcast to awareness
     if (awareness) {
       editors.forEach((editor) => {
         editor.onDidChangeCursorSelection(() => {
@@ -230,9 +259,12 @@ export class MonacoBinding {
             });
           }
         });
-        awareness.on('change', this._rerenderDecorations);
       });
-      this.awareness = awareness;
+
+      this._awarenessChangeHandler = () => {
+        this._rerenderDecorations();
+      };
+      awareness.on('change', this._awarenessChangeHandler);
     }
   }
 
@@ -241,8 +273,8 @@ export class MonacoBinding {
     this._monacoDisposeHandler?.dispose();
     this.ytext.unobserve(this._ytextObserver);
     this.doc.off('beforeAllTransactions', this._beforeTransaction);
-    if (this.awareness) {
-      this.awareness.off('change', this._rerenderDecorations);
+    if (this.awareness && this._awarenessChangeHandler) {
+      this.awareness.off('change', this._awarenessChangeHandler);
     }
   }
 }

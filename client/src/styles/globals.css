@@ -242,23 +242,4 @@ select.input {
 /* Yjs CRDT Remote Selection & Cursor Awareness Styling */
 .yRemoteSelection {
   background-color: rgba(250, 204, 21, 0.2);
-  position: absolute;
-}
-
-.yRemoteSelectionHead {
-  position: absolute;
-  border-left: 2px solid;
-  border-color: inherit;
-  height: 100%;
-  box-sizing: border-box;
-}
-
-.yRemoteSelectionHead::after {
-  position: absolute;
-  content: ' ';
-  border: 3px solid;
-  border-color: inherit;
-  border-radius: 50%;
-  left: -4px;
-  top: -4px;
 }

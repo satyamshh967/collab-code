@@ -16,6 +16,8 @@ const CodeEditor = () => {
   const [isEditorReady, setIsEditorReady] = useState(false);
 
   const defaultCode = LANGUAGES.find((l) => l.id === language)?.defaultCode || '';
+  const updateCodeRef = useRef(updateCode);
+  updateCodeRef.current = updateCode;
 
   const handleEditorDidMount = (editor, monaco) => {
     editorRef.current = editor;
@@ -23,7 +25,7 @@ const CodeEditor = () => {
     setIsEditorReady(true);
   };
 
-  // Setup Yjs CRDT Provider & Monaco Binding
+  // 1. Initialize Yjs CRDT Provider & Monaco Binding once per room session
   useEffect(() => {
     if (!isEditorReady || !editorRef.current || !monacoRef.current || !roomId) return;
 
@@ -32,7 +34,7 @@ const CodeEditor = () => {
     const model = editor.getModel();
     if (!model) return;
 
-    // Destroy existing binding/provider if roomId changed
+    // Clean up any existing instances
     if (bindingRef.current) {
       bindingRef.current.destroy();
       bindingRef.current = null;
@@ -59,14 +61,11 @@ const CodeEditor = () => {
 
     const yText = ydoc.getText('monaco');
 
-    // Setup awareness (cursor, selection, username, color)
+    // Set initial awareness state
     const storedUsername = localStorage.getItem('codecollab_username') || 'Guest';
-    const username = currentUser?.username || storedUsername;
-    const color = currentUser?.color || '#38bdf8';
-
     provider.awareness.setLocalStateField('user', {
-      name: username,
-      color: color
+      name: storedUsername,
+      color: '#38bdf8'
     });
 
     // Monaco Yjs Binding with native monaco instance
@@ -86,17 +85,24 @@ const CodeEditor = () => {
           yText.insert(0, defaultCode);
         });
       }
-      updateCode(yText.toString());
+      if (updateCodeRef.current) {
+        updateCodeRef.current(yText.toString());
+      }
     });
 
     // Listen to changes in Yjs CRDT doc and update RoomContext code
     const observer = () => {
-      updateCode(yText.toString());
+      if (updateCodeRef.current) {
+        updateCodeRef.current(yText.toString());
+      }
     };
     yText.observe(observer);
 
     return () => {
       yText.unobserve(observer);
+      if (provider.awareness) {
+        provider.awareness.setLocalState(null);
+      }
       if (bindingRef.current) {
         bindingRef.current.destroy();
         bindingRef.current = null;
@@ -110,9 +116,19 @@ const CodeEditor = () => {
         ydocRef.current = null;
       }
     };
-  }, [isEditorReady, roomId, currentUser, defaultCode, updateCode]);
+  }, [isEditorReady, roomId]); // ONLY re-create when editor is ready or roomId changes!
 
-  // Handle external snapshot restore or code updates
+  // 2. Update user awareness in place without destroying/recreating Y.Doc
+  useEffect(() => {
+    if (!providerRef.current || !currentUser) return;
+
+    providerRef.current.awareness.setLocalStateField('user', {
+      name: currentUser.username,
+      color: currentUser.color || '#38bdf8'
+    });
+  }, [currentUser]);
+
+  // 3. Handle external snapshot restore or code updates
   useEffect(() => {
     if (!ydocRef.current) return;
     const yText = ydocRef.current.getText('monaco');
