@@ -116,6 +116,7 @@ const CodeEditor = () => {
         ydocRef.current = null;
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEditorReady, roomId]); // ONLY re-create when editor is ready or roomId changes!
 
   // 2. Update user awareness in place without destroying/recreating Y.Doc
