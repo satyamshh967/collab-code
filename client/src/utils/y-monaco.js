@@ -90,9 +90,19 @@ export class MonacoBinding {
         const currentDecorations = this._decorations.get(editor) || [];
         const newDecorations = [];
         const localClientId = this.awareness.clientID;
+        const activeClientIds = new Set(Array.from(this.awareness.getStates().keys()));
+
+        // Clean up orphan styles for clients who disconnected
+        document.querySelectorAll("style[id^='y-cursor-style-']").forEach((el) => {
+          const rawId = el.id.replace('y-cursor-style-', '');
+          const numId = Number(rawId);
+          if (!activeClientIds.has(numId) || numId === localClientId) {
+            el.remove();
+          }
+        });
 
         this.awareness.getStates().forEach((state, clientID) => {
-          // Strictly skip local client's own cursor!
+          // Strictly skip local client's own cursor
           if (clientID === localClientId || clientID === this.doc.clientID) {
             return;
           }
@@ -111,73 +121,70 @@ export class MonacoBinding {
 
           if (anchorAbs !== null && headAbs !== null && anchorAbs.type === ytext && headAbs.type === ytext) {
             const user = state.user || {};
-            const color = user.color || '#3b82f6';
-            const name = user.name || 'User';
+            const color = user.color || '#38bdf8';
+            const name = user.name || 'Collaborator';
 
-            // Inject CSS styles for remote peer cursor & selection
+            // Inject or update dynamic peer CSS style
             const styleId = `y-cursor-style-${clientID}`;
-            if (!document.getElementById(styleId)) {
-              const style = document.createElement('style');
+            let style = document.getElementById(styleId);
+            if (!style) {
+              style = document.createElement('style');
               style.id = styleId;
-              style.textContent = `
-                .yRemoteSelection-${clientID} {
-                  background-color: ${color}33 !important;
-                }
-                .yRemoteCursorHead-${clientID} {
-                  border-left: 2px solid ${color} !important;
-                  margin-left: -1px;
-                }
-                .yRemoteCursorLabel-${clientID} {
-                  background-color: ${color} !important;
-                  color: #ffffff !important;
-                  font-size: 10px !important;
-                  font-weight: 600 !important;
-                  padding: 1px 4px !important;
-                  border-radius: 3px !important;
-                  margin-left: 2px !important;
-                  white-space: nowrap !important;
-                  user-select: none !important;
-                  pointer-events: none !important;
-                  vertical-align: top !important;
-                  display: inline-block !important;
-                  line-height: 1.2 !important;
-                  position: relative !important;
-                  top: -0.6em !important;
-                  z-index: 50 !important;
-                }
-              `;
               document.head.appendChild(style);
             }
+            style.textContent = `
+              .yRemoteSelection-${clientID} {
+                background-color: ${color}33 !important;
+                border-radius: 2px !important;
+              }
+              .yRemoteSelectionHead-${clientID} {
+                position: absolute !important;
+                box-sizing: border-box !important;
+                height: 100% !important;
+                border-left: 2px solid ${color} !important;
+                margin-left: -1px !important;
+                z-index: 25 !important;
+                pointer-events: none !important;
+              }
+              .yRemoteSelectionHead-${clientID}::after {
+                content: "${name.replace(/"/g, '\\"')}" !important;
+                position: absolute !important;
+                top: -1.35em !important;
+                left: -2px !important;
+                background-color: ${color} !important;
+                color: #ffffff !important;
+                font-size: 11px !important;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+                font-weight: 600 !important;
+                padding: 1px 6px !important;
+                border-radius: 3px 3px 3px 0 !important;
+                white-space: nowrap !important;
+                pointer-events: none !important;
+                z-index: 100 !important;
+                line-height: 1.2 !important;
+                box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4) !important;
+              }
+            `;
 
-            const posAnchor = monacoModel.getPositionAt(anchorAbs.index);
-            const posHead = monacoModel.getPositionAt(headAbs.index);
-
-            // Remote selection highlight (when text is highlighted)
-            if (anchorAbs.index !== headAbs.index) {
-              const start = anchorAbs.index < headAbs.index ? posAnchor : posHead;
-              const end = anchorAbs.index < headAbs.index ? posHead : posAnchor;
-              newDecorations.push({
-                range: new this.monaco.Range(start.lineNumber, start.column, end.lineNumber, end.column),
-                options: {
-                  className: `yRemoteSelection-${clientID}`,
-                  stickiness: this.monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
-                }
-              });
+            let start, end, afterContentClassName, beforeContentClassName;
+            if (anchorAbs.index < headAbs.index) {
+              start = monacoModel.getPositionAt(anchorAbs.index);
+              end = monacoModel.getPositionAt(headAbs.index);
+              afterContentClassName = `yRemoteSelectionHead yRemoteSelectionHead-${clientID}`;
+              beforeContentClassName = null;
+            } else {
+              start = monacoModel.getPositionAt(headAbs.index);
+              end = monacoModel.getPositionAt(anchorAbs.index);
+              afterContentClassName = null;
+              beforeContentClassName = `yRemoteSelectionHead yRemoteSelectionHead-${clientID}`;
             }
 
-            // Remote cursor caret & username badge
             newDecorations.push({
-              range: new this.monaco.Range(posHead.lineNumber, posHead.column, posHead.lineNumber, posHead.column),
+              range: new this.monaco.Range(start.lineNumber, start.column, end.lineNumber, end.column),
               options: {
-                className: `yRemoteCursor-${clientID}`,
-                before: {
-                  content: '\uFEFF',
-                  inlineClassName: `yRemoteCursorHead-${clientID}`
-                },
-                after: {
-                  content: ` ${name} `,
-                  inlineClassName: `yRemoteCursorLabel-${clientID}`
-                },
+                className: `yRemoteSelection yRemoteSelection-${clientID}`,
+                afterContentClassName,
+                beforeContentClassName,
                 stickiness: this.monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
               }
             });
@@ -244,8 +251,8 @@ export class MonacoBinding {
 
     // Capture local cursor/selection changes and broadcast to awareness
     if (awareness) {
-      editors.forEach((editor) => {
-        editor.onDidChangeCursorSelection(() => {
+      const broadcastSelection = () => {
+        editors.forEach((editor) => {
           if (editor.getModel() === monacoModel) {
             const sel = editor.getSelection();
             if (sel === null) return;
@@ -253,13 +260,28 @@ export class MonacoBinding {
             let anchor = monacoModel.getOffsetAt(sel.getStartPosition());
             let head = monacoModel.getOffsetAt(sel.getEndPosition());
 
+            if (this.monaco.SelectionDirection && sel.getDirection() === this.monaco.SelectionDirection.RTL) {
+              const tmp = anchor;
+              anchor = head;
+              head = tmp;
+            }
+
             awareness.setLocalStateField('selection', {
               anchor: Y.createRelativePositionFromTypeIndex(ytext, anchor),
               head: Y.createRelativePositionFromTypeIndex(ytext, head)
             });
           }
         });
+      };
+
+      editors.forEach((editor) => {
+        editor.onDidChangeCursorSelection(broadcastSelection);
+        editor.onDidChangeCursorPosition(broadcastSelection);
+        editor.onDidFocusEditorText(broadcastSelection);
       });
+
+      // Broadcast initial cursor position right away
+      setTimeout(broadcastSelection, 100);
 
       this._awarenessChangeHandler = () => {
         this._rerenderDecorations();
@@ -276,5 +298,13 @@ export class MonacoBinding {
     if (this.awareness && this._awarenessChangeHandler) {
       this.awareness.off('change', this._awarenessChangeHandler);
     }
+    document.querySelectorAll("style[id^='y-cursor-style-']").forEach((el) => el.remove());
+    this.editors.forEach((editor) => {
+      const decs = this._decorations.get(editor);
+      if (decs) {
+        editor.deltaDecorations(decs, []);
+      }
+    });
+    this._decorations.clear();
   }
 }

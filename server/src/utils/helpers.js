@@ -1,13 +1,14 @@
-import { v4 as uuidv4 } from 'uuid';
+import crypto from 'crypto';
 
 export const generateId = () => {
-  return uuidv4();
+  const hex = crypto.randomBytes(4).toString('hex');
+  return `${hex.slice(0, 4)}-${hex.slice(4, 8)}`;
 };
 
 const colors = [
-  '#FF5733', '#33FF57', '#3357FF', '#FF33A1', '#33FFA1',
-  '#A133FF', '#FFA133', '#33A1FF', '#A1FF33', '#FF3333',
-  '#33FF33', '#3333FF'
+  '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
+  '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1',
+  '#14b8a6', '#d946ef'
 ];
 
 export const generateColor = (existingColors = []) => {

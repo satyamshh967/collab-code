@@ -64,8 +64,8 @@ const CodeEditor = () => {
     // Set initial awareness state
     const storedUsername = localStorage.getItem('codecollab_username') || 'Guest';
     provider.awareness.setLocalStateField('user', {
-      name: storedUsername,
-      color: '#38bdf8'
+      name: currentUser?.username || storedUsername,
+      color: currentUser?.color || '#38bdf8'
     });
 
     // Monaco Yjs Binding with native monaco instance
@@ -87,6 +87,9 @@ const CodeEditor = () => {
       }
       if (updateCodeRef.current) {
         updateCodeRef.current(yText.toString());
+      }
+      if (bindingRef.current && bindingRef.current._rerenderDecorations) {
+        bindingRef.current._rerenderDecorations();
       }
     });
 
