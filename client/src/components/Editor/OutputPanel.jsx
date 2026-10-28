@@ -99,13 +99,16 @@ const OutputPanel = () => {
 
   return (
     <div style={{
-      height: isExpanded ? '34%' : '42px',
-      background: '#090d16',
+      height: isExpanded ? '34%' : '38px',
+      background: '#111113',
       borderTop: '1px solid var(--border)',
       display: 'flex',
       flexDirection: 'column',
-      transition: 'height 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
-      position: 'relative'
+      transition: 'height 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+      position: 'relative',
+      minWidth: 0,
+      width: '100%',
+      overflow: 'hidden'
     }}>
       {/* Terminal Titlebar */}
       <div
@@ -113,43 +116,36 @@ const OutputPanel = () => {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          padding: '0.45rem 1rem',
-          background: 'rgba(15, 23, 42, 0.9)',
+          padding: '0.4rem 1rem',
+          background: '#141418',
           borderBottom: isExpanded ? '1px solid var(--border)' : 'none',
           userSelect: 'none'
         }}
       >
-        {/* Left: Traffic Lights & Terminal Title */}
+        {/* Left: Terminal Title & Chevron */}
         <div 
           onClick={() => setIsExpanded(!isExpanded)}
-          style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}
+          style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
         >
-          {/* macOS traffic lights */}
-          <div style={{ display: 'flex', gap: '6px' }}>
-            <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#ef4444' }} />
-            <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#f59e0b' }} />
-            <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#22c55e' }} />
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.82rem' }}>
-            <Terminal size={14} color="var(--accent)" />
-            <span>Terminal</span>
-            {isExpanded ? <ChevronDown size={14} color="var(--text-muted)" /> : <ChevronUp size={14} color="var(--text-muted)" />}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)', fontWeight: 700, fontSize: '0.72rem', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+            <Terminal size={13} color="#a78bfa" />
+            <span>TERMINAL OUTPUT</span>
+            {isExpanded ? <ChevronDown size={13} color="var(--text-muted)" /> : <ChevronUp size={13} color="var(--text-muted)" />}
           </div>
 
           {getStatusBadge()}
         </div>
 
         {/* Right: Actions */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           {(output || error) && (
             <button
               className="btn"
               onClick={handleCopyOutput}
-              style={{ padding: '0.25rem 0.6rem', fontSize: '11px', borderRadius: '6px', background: 'rgba(30, 41, 59, 0.6)' }}
+              style={{ padding: '0.2rem 0.55rem', fontSize: '11px', borderRadius: '5px', background: '#1d1d22', border: '1px solid #2e2e38' }}
               title="Copy output to clipboard"
             >
-              {copied ? <Check size={12} color="var(--neon-green)" /> : <Copy size={12} />}
+              {copied ? <Check size={11} color="#10b981" /> : <Copy size={11} />}
               <span>{copied ? 'Copied' : 'Copy'}</span>
             </button>
           )}
@@ -157,39 +153,38 @@ const OutputPanel = () => {
           <button
             className="btn"
             onClick={clearExecutionOutput}
-            style={{ padding: '0.25rem 0.6rem', fontSize: '11px', borderRadius: '6px', background: 'rgba(30, 41, 59, 0.6)' }}
+            style={{ padding: '0.2rem 0.55rem', fontSize: '11px', borderRadius: '5px', background: '#1d1d22', border: '1px solid #2e2e38' }}
             title="Clear output"
           >
-            <Trash2 size={12} />
+            <Trash2 size={11} />
             <span>Clear</span>
           </button>
 
-          {/* Glowing Run Code Button */}
+          {/* Clean Run Code Button */}
           <button
-            className="btn btn-success"
+            className="btn btn-primary"
             onClick={handleRun}
             disabled={isRunning}
             style={{
-              padding: '0.3rem 0.9rem',
-              fontSize: '12px',
-              borderRadius: '6px',
+              padding: '0.25rem 0.75rem',
+              fontSize: '11px',
+              borderRadius: '5px',
               display: 'inline-flex',
               alignItems: 'center',
-              gap: '6px',
-              boxShadow: isRunning ? 'none' : '0 0 16px rgba(34, 197, 94, 0.35)'
+              gap: '5px'
             }}
             title="Run Code in sandboxed container (Ctrl+Enter)"
           >
             {isRunning ? (
               <>
-                <span className="spinner" style={{ width: '12px', height: '12px' }} />
+                <span className="spinner" style={{ width: '11px', height: '11px' }} />
                 <span>Running...</span>
               </>
             ) : (
               <>
-                <Play size={13} fill="#052e16" />
+                <Play size={11} fill="#ffffff" />
                 <span>Run Code</span>
-                <span style={{ fontSize: '10px', opacity: 0.7, marginLeft: '2px' }}>(Ctrl+↵)</span>
+                <span style={{ fontSize: '9px', opacity: 0.75, marginLeft: '2px' }}>(Ctrl+↵)</span>
               </>
             )}
           </button>
@@ -206,23 +201,23 @@ const OutputPanel = () => {
           fontSize: '12px',
           lineHeight: 1.6,
           whiteSpace: 'pre-wrap',
-          color: '#e2e8f0',
-          background: '#040711'
+          color: '#e4e4e7',
+          background: '#111113'
         }}>
           {/* Prompt prefix */}
-          <div style={{ color: 'var(--text-muted)', marginBottom: '0.4rem', fontSize: '11px' }}>
-            <span style={{ color: 'var(--neon-green)' }}>user@collab</span>
-            <span style={{ color: 'var(--text-secondary)' }}>:</span>
-            <span style={{ color: 'var(--accent)' }}>~/sandbox</span>
+          <div style={{ color: 'var(--text-muted)', marginBottom: '0.35rem', fontSize: '11px' }}>
+            <span style={{ color: '#10b981' }}>user@collab</span>
+            <span style={{ color: 'var(--text-muted)' }}>:</span>
+            <span style={{ color: '#a78bfa' }}>~/sandbox</span>
             <span>$ run {language}</span>
           </div>
 
-          {output && <div style={{ color: '#f1f5f9' }}>{output}</div>}
+          {output && <div style={{ color: '#f4f4f5' }}>{output}</div>}
           {error && <div style={{ color: '#f87171', marginTop: output ? '6px' : 0 }}>{error}</div>}
 
           {!output && !error && !isRunning && (
-            <div style={{ color: '#475569', fontStyle: 'italic', marginTop: '4px' }}>
-              Press <strong style={{ color: '#94a3b8' }}>Run Code</strong> or hit <kbd style={{ background: '#1e293b', padding: '1px 5px', borderRadius: '4px', border: '1px solid #334155' }}>Ctrl+Enter</kbd> to execute in an isolated container sandbox.
+            <div style={{ color: '#52525b', fontStyle: 'italic', marginTop: '4px' }}>
+              Press <strong style={{ color: '#a1a1aa' }}>Run Code</strong> or hit <kbd style={{ background: '#1c1c22', padding: '1px 5px', borderRadius: '4px', border: '1px solid #2e2e38', color: '#d4d4d8' }}>Ctrl+Enter</kbd> to execute in an isolated container sandbox.
             </div>
           )}
         </div>

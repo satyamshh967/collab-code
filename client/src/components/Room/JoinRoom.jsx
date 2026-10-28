@@ -43,10 +43,10 @@ const JoinRoom = () => {
   };
 
   return (
-    <form onSubmit={handleJoin} style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+    <form onSubmit={handleJoin} style={{ display: 'flex', flexDirection: 'column', gap: '1.1rem' }}>
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-          <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+          <label style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
             Room ID or Code
           </label>
           <button
@@ -59,7 +59,7 @@ const JoinRoom = () => {
           </button>
         </div>
         <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-          <span style={{ position: 'absolute', left: '12px', color: 'var(--text-muted)', fontFamily: 'monospace', fontSize: '1rem', fontWeight: 700 }}>
+          <span style={{ position: 'absolute', left: '12px', color: 'var(--text-muted)', fontFamily: 'monospace', fontSize: '0.95rem', fontWeight: 700 }}>
             #
           </span>
           <input 
@@ -75,7 +75,7 @@ const JoinRoom = () => {
 
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-          <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+          <label style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
             Your Display Name
           </label>
           <button
@@ -97,18 +97,18 @@ const JoinRoom = () => {
         />
       </div>
 
-      <div style={{ background: 'rgba(56, 189, 248, 0.05)', border: '1px solid rgba(56, 189, 248, 0.15)', borderRadius: '8px', padding: '0.75rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-        💡 <strong style={{ color: 'var(--text-primary)' }}>Tip:</strong> You can paste an invite link or room ID directly into the input above to jump in with your peers.
+      <div style={{ background: '#141418', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.75rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+        💡 <strong style={{ color: 'var(--text-primary)' }}>Tip:</strong> Paste an invite URL or short Room ID to jump straight into the collaborative session.
       </div>
 
       <button 
         type="submit" 
-        className="btn btn-success" 
-        style={{ padding: '0.75rem', fontSize: '0.95rem', marginTop: '0.3rem' }}
+        className="btn btn-primary" 
+        style={{ padding: '0.7rem', fontSize: '0.9rem', marginTop: '0.2rem', borderRadius: '6px' }}
       >
-        <LogIn size={16} />
+        <LogIn size={15} />
         Join Workspace
-        <ArrowRight size={16} />
+        <ArrowRight size={15} />
       </button>
     </form>
   );

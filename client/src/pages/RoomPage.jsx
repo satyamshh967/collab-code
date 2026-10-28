@@ -30,23 +30,23 @@ const RoomPage = () => {
   }, [roomId, joinRoom, leaveRoom, isConnected]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: 'var(--bg-primary)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100%', maxWidth: '100%', overflow: 'hidden', background: 'var(--bg-primary)' }}>
       <Header />
       {isInterviewRoom && <InterviewBanner />}
       
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        {/* Editor and Terminal (Left 72%) */}
-        <div style={{ flex: '0 0 72%', display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border)' }}>
-          <div style={{ flex: 1, position: 'relative' }}>
+      <div style={{ display: 'flex', flex: 1, width: '100%', minWidth: 0, overflow: 'hidden' }}>
+        {/* Editor and Terminal (Flexible Main Area) */}
+        <div style={{ flex: '1 1 auto', minWidth: 0, width: 0, display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border)', overflow: 'hidden' }}>
+          <div style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
             <CodeEditor />
           </div>
           <OutputPanel />
         </div>
 
-        {/* Sidebar Tabs (Right 28%) */}
-        <div style={{ flex: '0 0 28%', display: 'flex', flexDirection: 'column', background: 'var(--bg-secondary)', borderLeft: '1px solid rgba(255, 255, 255, 0.05)' }}>
+        {/* Sidebar Tabs (Right Fixed Pane) */}
+        <div style={{ flex: '0 0 340px', width: '340px', minWidth: '280px', maxWidth: '380px', display: 'flex', flexDirection: 'column', background: 'var(--bg-secondary)', borderLeft: '1px solid var(--border)', overflow: 'hidden' }}>
           {/* Tab Navigation Header */}
-          <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', background: 'rgba(15, 23, 42, 0.95)' }}>
+          <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', background: '#141418' }}>
             <button 
               onClick={() => setActiveTab('chat')} 
               style={tabStyle(activeTab === 'chat')}
@@ -54,7 +54,7 @@ const RoomPage = () => {
               <MessageSquare size={14} />
               <span>Chat</span>
               {chatMessages.length > 0 && (
-                <span style={{ fontSize: '10px', background: activeTab === 'chat' ? 'var(--accent)' : 'var(--bg-tertiary)', color: activeTab === 'chat' ? '#0f172a' : 'var(--text-secondary)', padding: '1px 5px', borderRadius: '10px', fontWeight: 700 }}>
+                <span style={{ fontSize: '10px', background: activeTab === 'chat' ? 'rgba(139, 92, 246, 0.25)' : '#1f1f26', color: activeTab === 'chat' ? '#c4b5fd' : 'var(--text-muted)', padding: '1px 5px', borderRadius: '4px', fontWeight: 600 }}>
                   {chatMessages.length}
                 </span>
               )}
@@ -66,7 +66,7 @@ const RoomPage = () => {
             >
               <Users size={14} />
               <span>Users</span>
-              <span style={{ fontSize: '10px', background: activeTab === 'users' ? 'var(--neon-green)' : 'rgba(34, 197, 94, 0.15)', color: activeTab === 'users' ? '#052e16' : 'var(--neon-green)', padding: '1px 5px', borderRadius: '10px', fontWeight: 700 }}>
+              <span style={{ fontSize: '10px', background: activeTab === 'users' ? 'rgba(16, 185, 129, 0.2)' : '#1f1f26', color: activeTab === 'users' ? '#10b981' : 'var(--text-muted)', padding: '1px 5px', borderRadius: '4px', fontWeight: 600 }}>
                 {users.length || 1}
               </span>
             </button>
@@ -78,7 +78,7 @@ const RoomPage = () => {
               <Camera size={14} />
               <span>Snapshots</span>
               {snapshots.length > 0 && (
-                <span style={{ fontSize: '10px', background: 'var(--bg-tertiary)', color: 'var(--text-secondary)', padding: '1px 5px', borderRadius: '10px', fontWeight: 700 }}>
+                <span style={{ fontSize: '10px', background: '#1f1f26', color: 'var(--text-muted)', padding: '1px 5px', borderRadius: '4px', fontWeight: 600 }}>
                   {snapshots.length}
                 </span>
               )}
@@ -86,7 +86,7 @@ const RoomPage = () => {
           </div>
           
           {/* Tab Content Viewport */}
-          <div style={{ flex: 1, overflow: 'hidden' }}>
+          <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
             {activeTab === 'chat' && <ChatPanel />}
             {activeTab === 'users' && <UsersList />}
             {activeTab === 'snapshots' && <SnapshotPanel />}
@@ -99,14 +99,14 @@ const RoomPage = () => {
 
 const tabStyle = (isActive) => ({
   flex: 1,
-  padding: '0.75rem 0.5rem',
-  background: isActive ? 'rgba(30, 41, 59, 0.5)' : 'transparent',
-  color: isActive ? 'var(--accent)' : 'var(--text-secondary)',
+  padding: '0.65rem 0.5rem',
+  background: isActive ? 'rgba(139, 92, 246, 0.08)' : 'transparent',
+  color: isActive ? '#f4f4f5' : 'var(--text-muted)',
   border: 'none',
-  borderBottom: isActive ? '2px solid var(--accent)' : '2px solid transparent',
+  borderBottom: isActive ? '2px solid #8b5cf6' : '2px solid transparent',
   cursor: 'pointer',
-  fontWeight: isActive ? 700 : 500,
-  fontSize: '0.82rem',
+  fontWeight: isActive ? 600 : 500,
+  fontSize: '0.8rem',
   outline: 'none',
   display: 'flex',
   alignItems: 'center',

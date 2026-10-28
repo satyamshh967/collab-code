@@ -62,12 +62,12 @@ const Header = () => {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
-      padding: '0.55rem 1.25rem',
-      background: 'rgba(15, 23, 42, 0.85)',
-      backdropFilter: 'blur(16px)',
-      WebkitBackdropFilter: 'blur(16px)',
+      padding: '0.45rem 1.25rem',
+      background: '#141418',
       borderBottom: '1px solid var(--border)',
-      height: '56px',
+      height: '52px',
+      width: '100%',
+      maxWidth: '100%',
       boxSizing: 'border-box',
       position: 'relative',
       zIndex: 50
@@ -76,22 +76,21 @@ const Header = () => {
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
         <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '8px' }}>
           <div style={{
-            width: '28px',
-            height: '28px',
-            borderRadius: '8px',
-            background: 'var(--accent-gradient)',
+            width: '26px',
+            height: '26px',
+            borderRadius: '6px',
+            background: '#7c3aed',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             fontWeight: 800,
-            color: '#0f172a',
-            fontSize: '0.9rem',
-            boxShadow: '0 0 12px rgba(56, 189, 248, 0.4)'
+            color: '#ffffff',
+            fontSize: '0.85rem'
           }}>
             ⚡
           </div>
-          <span style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '1.15rem', letterSpacing: '-0.5px' }}>
-            Code<span className="gradient-text">Collab</span>
+          <span style={{ color: '#f4f4f5', fontWeight: 700, fontSize: '1.05rem', letterSpacing: '-0.3px' }}>
+            Code<span style={{ color: '#a78bfa' }}>Collab</span>
           </span>
         </Link>
         
@@ -104,23 +103,23 @@ const Header = () => {
               display: 'inline-flex',
               alignItems: 'center',
               gap: '0.35rem',
-              background: 'rgba(30, 41, 59, 0.7)',
+              background: '#1d1d22',
               border: '1px solid var(--border)',
               padding: '0.2rem 0.55rem',
-              borderRadius: '6px',
-              fontSize: '0.8rem',
+              borderRadius: '5px',
+              fontSize: '0.78rem',
               fontFamily: 'monospace',
-              color: 'var(--text-primary)',
+              color: '#f4f4f5',
               cursor: 'pointer',
-              transition: 'all 0.2s ease',
+              transition: 'all 0.15s ease',
               userSelect: 'none'
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#8b5cf6'; }}
             onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}
           >
-            <span style={{ color: 'var(--accent)', fontWeight: 700 }}>#</span>
+            <span style={{ color: '#a78bfa', fontWeight: 700 }}>#</span>
             <span style={{ fontWeight: 600 }}>{displayRoomId}</span>
-            {copiedId ? <Check size={12} color="var(--success)" /> : <Copy size={12} color="var(--text-secondary)" />}
+            {copiedId ? <Check size={12} color="#10b981" /> : <Copy size={12} color="var(--text-muted)" />}
           </div>
         )}
 
@@ -129,25 +128,24 @@ const Header = () => {
           <div style={{ display: 'flex', alignItems: 'center' }}>
             {users.slice(0, 4).map((u, idx) => {
               const initial = (u.username || 'G').charAt(0).toUpperCase();
-              const userColor = u.color || '#38bdf8';
+              const userColor = u.color || '#8b5cf6';
               return (
                 <div
                   key={idx}
                   title={`${u.username} (Online)`}
                   style={{
-                    width: '26px',
-                    height: '26px',
+                    width: '24px',
+                    height: '24px',
                     borderRadius: '50%',
                     background: userColor,
                     color: '#ffffff',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    fontSize: '11px',
+                    fontSize: '10px',
                     fontWeight: 700,
-                    marginLeft: idx === 0 ? '0' : '-8px',
-                    border: '2px solid #0f172a',
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+                    marginLeft: idx === 0 ? '0' : '-6px',
+                    border: '2px solid #141418',
                     cursor: 'default',
                     transition: 'transform 0.15s ease'
                   }}
@@ -165,15 +163,15 @@ const Header = () => {
             alignItems: 'center',
             gap: '5px',
             marginLeft: '6px',
-            padding: '0.2rem 0.5rem',
-            background: 'rgba(34, 197, 94, 0.1)',
-            border: '1px solid rgba(34, 197, 94, 0.25)',
-            borderRadius: '12px',
-            fontSize: '0.75rem',
-            color: 'var(--neon-green)',
+            padding: '0.15rem 0.45rem',
+            background: 'rgba(16, 185, 129, 0.1)',
+            border: '1px solid rgba(16, 185, 129, 0.25)',
+            borderRadius: '10px',
+            fontSize: '0.72rem',
+            color: '#10b981',
             fontWeight: 600
           }}>
-            <span className="status-dot pulsing" style={{ width: '6px', height: '6px' }} />
+            <span className="status-dot pulsing" style={{ width: '5px', height: '5px' }} />
             <span>{users.length} Online</span>
           </div>
         </div>
@@ -182,7 +180,7 @@ const Header = () => {
       {/* Right Section: Quick Reactions, Language, Share, Leave */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
         {/* Fun Quick Reaction Bar */}
-        <div style={{ display: 'flex', alignItems: 'center', background: 'rgba(30, 41, 59, 0.6)', border: '1px solid var(--border)', borderRadius: '20px', padding: '2px 6px', gap: '2px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', background: '#1d1d22', border: '1px solid var(--border)', borderRadius: '16px', padding: '2px 5px', gap: '2px' }}>
           {QUICK_REACTIONS.map((emoji) => (
             <button
               key={emoji}
@@ -190,14 +188,14 @@ const Header = () => {
               style={{
                 background: 'transparent',
                 border: 'none',
-                fontSize: '14px',
+                fontSize: '13px',
                 cursor: 'pointer',
-                padding: '3px 4px',
+                padding: '2px 3px',
                 borderRadius: '50%',
                 lineHeight: 1,
                 transition: 'transform 0.15s ease'
               }}
-              onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.35)'; }}
+              onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.3)'; }}
               onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
               title={`Send reaction: ${emoji}`}
             >
@@ -213,17 +211,17 @@ const Header = () => {
           className="btn"
           onClick={copyInviteLink}
           style={{
-            background: copiedLink ? 'rgba(34, 197, 94, 0.15)' : 'rgba(56, 189, 248, 0.1)',
-            color: copiedLink ? 'var(--neon-green)' : 'var(--accent)',
-            border: copiedLink ? '1px solid rgba(34, 197, 94, 0.4)' : '1px solid rgba(56, 189, 248, 0.3)',
-            padding: '0.35rem 0.75rem',
-            fontSize: '0.82rem',
-            borderRadius: '8px'
+            background: copiedLink ? 'rgba(16, 185, 129, 0.15)' : '#1d1d22',
+            color: copiedLink ? '#10b981' : '#e4e4e7',
+            border: copiedLink ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid var(--border)',
+            padding: '0.35rem 0.7rem',
+            fontSize: '0.8rem',
+            borderRadius: '6px'
           }}
           title="Copy shareable invite link to clipboard"
         >
-          {copiedLink ? <Check size={14} color="var(--neon-green)" /> : <Share2 size={14} />}
-          <span>{copiedLink ? 'Copied! ✓' : 'Share'}</span>
+          {copiedLink ? <Check size={13} color="#10b981" /> : <Share2 size={13} />}
+          <span>{copiedLink ? 'Copied!' : 'Share'}</span>
         </button>
 
         {/* Leave Room Button */}
@@ -231,9 +229,9 @@ const Header = () => {
           className="btn btn-danger" 
           onClick={handleLeave} 
           style={{ 
-            padding: '0.35rem 0.75rem', 
-            fontSize: '0.82rem',
-            borderRadius: '8px'
+            padding: '0.35rem 0.7rem', 
+            fontSize: '0.8rem',
+            borderRadius: '6px'
           }}
         >
           Leave

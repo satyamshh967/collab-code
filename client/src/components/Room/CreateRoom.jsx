@@ -41,14 +41,14 @@ const CreateRoom = () => {
   };
 
   return (
-    <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+    <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: '1.1rem' }}>
       <div>
-        <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+        <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
           Room Name
         </label>
         <input 
           className="input" 
-          placeholder="e.g. Algorithms & Cocktails" 
+          placeholder="e.g. Distributed Algorithms" 
           value={name} 
           onChange={e => setName(e.target.value)} 
           required 
@@ -58,7 +58,7 @@ const CreateRoom = () => {
 
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-          <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+          <label style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
             Your Display Name
           </label>
           <button
@@ -81,10 +81,10 @@ const CreateRoom = () => {
       </div>
 
       <div>
-        <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+        <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
           Programming Language
         </label>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem' }}>
           {LANGUAGES.map((lang) => {
             const isSelected = language === lang.id;
             return (
@@ -93,38 +93,41 @@ const CreateRoom = () => {
                 type="button"
                 onClick={() => setLanguage(lang.id)}
                 style={{
-                  padding: '0.5rem 0.6rem',
-                  borderRadius: '8px',
-                  background: isSelected ? 'rgba(56, 189, 248, 0.15)' : 'rgba(15, 23, 42, 0.5)',
-                  border: isSelected ? '1.5px solid var(--accent)' : '1px solid var(--border)',
-                  color: isSelected ? 'var(--accent)' : 'var(--text-secondary)',
-                  fontWeight: isSelected ? 700 : 500,
+                  padding: '0.55rem 0.75rem',
+                  borderRadius: '6px',
+                  background: isSelected ? 'rgba(139, 92, 246, 0.12)' : '#141418',
+                  border: isSelected ? '1.5px solid #8b5cf6' : '1px solid var(--border)',
+                  color: isSelected ? '#f4f4f5' : 'var(--text-secondary)',
+                  fontWeight: isSelected ? 600 : 500,
                   fontSize: '0.82rem',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease',
-                  textAlign: 'center'
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between'
                 }}
               >
-                {lang.name}
+                <span>{lang.name}</span>
+                <span className={`ref-radio ${isSelected ? 'active' : ''}`} />
               </button>
             );
           })}
         </div>
       </div>
 
-      <div style={{ background: 'rgba(15, 23, 42, 0.4)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ background: '#141418', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <ShieldCheck size={16} color="var(--accent)" />
           <div>
-            <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>Interview Mode</div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Structured technical interview workspace</div>
+            <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)' }}>Interview Mode</div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Focused technical interview environment</div>
           </div>
         </div>
         <input 
           type="checkbox" 
           checked={isInterview} 
           onChange={e => setIsInterview(e.target.checked)} 
-          style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: 'var(--accent)' }}
+          style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: 'var(--accent)' }}
         />
       </div>
 
@@ -132,18 +135,18 @@ const CreateRoom = () => {
         type="submit" 
         className="btn btn-primary" 
         disabled={isLoading} 
-        style={{ padding: '0.75rem', fontSize: '0.95rem', marginTop: '0.3rem' }}
+        style={{ padding: '0.7rem', fontSize: '0.9rem', marginTop: '0.2rem', borderRadius: '6px' }}
       >
         {isLoading ? (
           <>
-            <span className="spinner" style={{ width: '16px', height: '16px' }} />
+            <span className="spinner" style={{ width: '15px', height: '15px' }} />
             Creating Workspace...
           </>
         ) : (
           <>
-            <Sparkles size={16} />
+            <Sparkles size={15} />
             Create Collaborative Room
-            <ArrowRight size={16} />
+            <ArrowRight size={15} />
           </>
         )}
       </button>

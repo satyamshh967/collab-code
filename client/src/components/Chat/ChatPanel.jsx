@@ -82,18 +82,17 @@ const ChatPanel = () => {
               >
                 {/* Avatar */}
                 <div style={{
-                  width: '28px',
-                  height: '28px',
+                  width: '26px',
+                  height: '26px',
                   borderRadius: '50%',
-                  background: isMe ? 'var(--accent)' : 'linear-gradient(135deg, #a855f7 0%, #6366f1 100%)',
+                  background: isMe ? '#7c3aed' : '#272730',
                   color: '#ffffff',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   fontSize: '11px',
                   fontWeight: 700,
-                  flexShrink: 0,
-                  boxShadow: '0 2px 5px rgba(0,0,0,0.2)'
+                  flexShrink: 0
                 }}>
                   {initial}
                 </div>
@@ -107,7 +106,7 @@ const ChatPanel = () => {
                     marginBottom: '2px',
                     flexDirection: isMe ? 'row-reverse' : 'row'
                   }}>
-                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: isMe ? 'var(--accent)' : '#a855f7' }}>
+                    <span style={{ fontSize: '0.72rem', fontWeight: 600, color: isMe ? '#a78bfa' : '#c4b5fd' }}>
                       {isMe ? 'You' : msg.username}
                     </span>
                     <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
@@ -116,11 +115,11 @@ const ChatPanel = () => {
                   </div>
 
                   <div style={{
-                    background: isMe ? 'rgba(56, 189, 248, 0.15)' : 'rgba(30, 41, 59, 0.7)',
-                    border: isMe ? '1px solid rgba(56, 189, 248, 0.3)' : '1px solid var(--border)',
-                    padding: '0.5rem 0.75rem',
-                    borderRadius: isMe ? '12px 2px 12px 12px' : '2px 12px 12px 12px',
-                    fontSize: '0.875rem',
+                    background: isMe ? 'rgba(139, 92, 246, 0.15)' : '#19191e',
+                    border: isMe ? '1px solid rgba(139, 92, 246, 0.35)' : '1px solid var(--border)',
+                    padding: '0.45rem 0.75rem',
+                    borderRadius: isMe ? '10px 2px 10px 10px' : '2px 10px 10px 10px',
+                    fontSize: '0.85rem',
                     color: 'var(--text-primary)',
                     wordBreak: 'break-word',
                     lineHeight: 1.4
@@ -136,17 +135,17 @@ const ChatPanel = () => {
       </div>
 
       {/* Quick Reaction Bar */}
-      <div style={{ display: 'flex', gap: '6px', padding: '0.4rem 1rem 0 1rem', overflowX: 'auto' }}>
+      <div style={{ display: 'flex', gap: '5px', padding: '0.4rem 1rem 0 1rem', overflowX: 'auto' }}>
         {CHAT_EMOJIS.map((emoji) => (
           <button
             key={emoji}
             onClick={() => handleQuickReaction(emoji)}
             style={{
-              background: 'rgba(30, 41, 59, 0.5)',
+              background: '#1a1a20',
               border: '1px solid var(--border)',
-              borderRadius: '16px',
-              padding: '2px 7px',
-              fontSize: '13px',
+              borderRadius: '12px',
+              padding: '2px 6px',
+              fontSize: '12px',
               cursor: 'pointer',
               transition: 'transform 0.15s ease',
               lineHeight: 1.2
@@ -161,10 +160,10 @@ const ChatPanel = () => {
       </div>
 
       {/* Chat Input */}
-      <form onSubmit={handleSend} style={{ padding: '0.75rem 1rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+      <form onSubmit={handleSend} style={{ padding: '0.65rem 1rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
         <input 
           className="input" 
-          style={{ flex: 1, padding: '0.5rem 0.8rem', fontSize: '0.85rem', borderRadius: '20px' }} 
+          style={{ flex: 1, padding: '0.45rem 0.75rem', fontSize: '0.85rem', borderRadius: '6px' }} 
           placeholder="Send a message..." 
           value={text} 
           onChange={(e) => setText(e.target.value)} 
@@ -172,10 +171,10 @@ const ChatPanel = () => {
         <button 
           type="submit" 
           className="btn btn-primary"
-          style={{ width: '36px', height: '36px', padding: 0, borderRadius: '50%', flexShrink: 0 }}
+          style={{ width: '32px', height: '32px', padding: 0, borderRadius: '6px', flexShrink: 0 }}
           title="Send message"
         >
-          <Send size={15} />
+          <Send size={14} />
         </button>
       </form>
     </div>
