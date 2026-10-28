@@ -5,8 +5,283 @@ import JoinRoom from '../components/Room/JoinRoom';
 import { api } from '../services/api';
 import { Sparkles, Users, ArrowRight, Zap, RefreshCw, Copy, Check } from 'lucide-react';
 
+const LANGUAGE_SNIPPETS = {
+  javascript: {
+    filename: 'index.js',
+    raw: `// Collaborative Sandbox Engine (CRDT + Docker)
+import { YDoc, WebsocketProvider } from 'collab-code';
+
+const doc = new YDoc();
+const awareness = doc.getAwareness();
+
+awareness.setLocalStateField('user', {
+  name: 'Developer',
+  color: '#8b5cf6',
+  cursor: { line: 12, column: 4 }
+});
+
+export async function executeSandbox(source, lang) {
+  return await runner.dispatch({ code: source, language: lang });
+}`,
+    render: () => (
+      <>
+        <span style={{ color: '#71717a' }}>{'// Collaborative Sandbox Engine (CRDT + Docker)'}</span>{'\n'}
+        <span style={{ color: '#c084fc' }}>import</span> {'{ YDoc, WebsocketProvider }'} <span style={{ color: '#c084fc' }}>from</span> <span style={{ color: '#38bdf8' }}>'collab-code'</span>;{'\n\n'}
+        <span style={{ color: '#c084fc' }}>const</span> <span style={{ color: '#fbbf24' }}>doc</span> = <span style={{ color: '#c084fc' }}>new</span> <span style={{ color: '#34d399' }}>YDoc</span>();{'\n'}
+        <span style={{ color: '#c084fc' }}>const</span> <span style={{ color: '#fbbf24' }}>awareness</span> = doc.<span style={{ color: '#60a5fa' }}>getAwareness</span>();{'\n\n'}
+        awareness.<span style={{ color: '#60a5fa' }}>setLocalStateField</span>(<span style={{ color: '#38bdf8' }}>'user'</span>, {'{'}{'\n'}
+        {'  '}name: <span style={{ color: '#38bdf8' }}>'Developer'</span>,{'\n'}
+        {'  '}color: <span style={{ color: '#a78bfa' }}>'#8b5cf6'</span>,{'\n'}
+        {'  '}cursor: {'{ '}line: <span style={{ color: '#f59e0b' }}>12</span>, column: <span style={{ color: '#f59e0b' }}>4</span> {'}'}{'\n'}
+        {'}'});{'\n\n'}
+        <span style={{ color: '#c084fc' }}>export async function</span> <span style={{ color: '#60a5fa' }}>executeSandbox</span>(source, lang) {'{'}{'\n'}
+        {'  '}<span style={{ color: '#c084fc' }}>return await</span> runner.<span style={{ color: '#60a5fa' }}>dispatch</span>({'{ '}code: source, language: lang {'}'});{'\n'}
+        {'}'}
+      </>
+    )
+  },
+  go: {
+    filename: 'main.go',
+    raw: `// Collaborative Sandbox Engine (CRDT + Docker)
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+type Collaborator struct {
+	Username string \`json:"username"\`
+	Color    string \`json:"color"\`
+}
+
+func main() {
+	peer := Collaborator{Username: "Developer", Color: "#8b5cf6"}
+	fmt.Printf("Connected peer %s to room [awareness active]\\n", peer.Username)
+
+	start := time.Now()
+	// Sandboxed Docker container runner
+	fmt.Printf("Execution completed in %v with exit code 0\\n", time.Since(start))
+}`,
+    render: () => (
+      <>
+        <span style={{ color: '#71717a' }}>{'// Collaborative Sandbox Engine (CRDT + Docker)'}</span>{'\n'}
+        <span style={{ color: '#c084fc' }}>package</span> <span style={{ color: '#f4f4f5' }}>main</span>{'\n\n'}
+        <span style={{ color: '#c084fc' }}>import</span> ({'\n'}
+        {'  '}<span style={{ color: '#38bdf8' }}>"fmt"</span>{'\n'}
+        {'  '}<span style={{ color: '#38bdf8' }}>"time"</span>{'\n'}
+        ){'\n\n'}
+        <span style={{ color: '#c084fc' }}>type</span> <span style={{ color: '#34d399' }}>Collaborator</span> <span style={{ color: '#c084fc' }}>struct</span> {'{'}{'\n'}
+        {'  '}Username <span style={{ color: '#60a5fa' }}>string</span> <span style={{ color: '#38bdf8' }}>`json:"username"`</span>{'\n'}
+        {'  '}Color    <span style={{ color: '#60a5fa' }}>string</span> <span style={{ color: '#38bdf8' }}>`json:"color"`</span>{'\n'}
+        {'}'}{'\n\n'}
+        <span style={{ color: '#c084fc' }}>func</span> <span style={{ color: '#60a5fa' }}>main</span>() {'{'}{'\n'}
+        {'  '}peer := <span style={{ color: '#34d399' }}>Collaborator</span>{'{'}Username: <span style={{ color: '#38bdf8' }}>"Developer"</span>, Color: <span style={{ color: '#a78bfa' }}>"#8b5cf6"</span>{'}'}{'\n'}
+        {'  '}fmt.<span style={{ color: '#60a5fa' }}>Printf</span>(<span style={{ color: '#38bdf8' }}>"Connected peer %s to room [awareness active]\\n"</span>, peer.Username){'\n\n'}
+        {'  '}start := time.<span style={{ color: '#60a5fa' }}>Now</span>(){'\n'}
+        {'  '}<span style={{ color: '#71717a' }}>{'// Sandboxed Docker container runner'}</span>{'\n'}
+        {'  '}fmt.<span style={{ color: '#60a5fa' }}>Printf</span>(<span style={{ color: '#38bdf8' }}>"Execution completed in %v with exit code 0\\n"</span>, time.<span style={{ color: '#60a5fa' }}>Since</span>(start)){'\n'}
+        {'}'}
+      </>
+    )
+  },
+  python: {
+    filename: 'main.py',
+    raw: `# Collaborative Sandbox Engine (CRDT + Docker)
+from collab_engine import SessionWorker, YDocAwareness
+import time
+
+doc = YDocAwareness(room_id="room-784")
+doc.set_user_presence(username="Developer", color="#8b5cf6")
+
+def execute_sandbox(source: str, lang: str = "python"):
+    runner = SessionWorker.spawn(isolated=True, timeout_sec=5.0)
+    result = runner.execute(code=source)
+    print(f"Executed in {result.elapsed_ms}ms with exit code 0")
+    return result
+
+if __name__ == "__main__":
+    execute_sandbox("print('Hello from isolated container!')")`,
+    render: () => (
+      <>
+        <span style={{ color: '#71717a' }}>{'# Collaborative Sandbox Engine (CRDT + Docker)'}</span>{'\n'}
+        <span style={{ color: '#c084fc' }}>from</span> <span style={{ color: '#f4f4f5' }}>collab_engine</span> <span style={{ color: '#c084fc' }}>import</span> <span style={{ color: '#34d399' }}>SessionWorker</span>, <span style={{ color: '#34d399' }}>YDocAwareness</span>{'\n'}
+        <span style={{ color: '#c084fc' }}>import</span> <span style={{ color: '#f4f4f5' }}>time</span>{'\n\n'}
+        doc = <span style={{ color: '#34d399' }}>YDocAwareness</span>(room_id=<span style={{ color: '#38bdf8' }}>"room-784"</span>){'\n'}
+        doc.<span style={{ color: '#60a5fa' }}>set_user_presence</span>(username=<span style={{ color: '#38bdf8' }}>"Developer"</span>, color=<span style={{ color: '#a78bfa' }}>"#8b5cf6"</span>){'\n\n'}
+        <span style={{ color: '#c084fc' }}>def</span> <span style={{ color: '#60a5fa' }}>execute_sandbox</span>(source: <span style={{ color: '#60a5fa' }}>str</span>, lang: <span style={{ color: '#60a5fa' }}>str</span> = <span style={{ color: '#38bdf8' }}>"python"</span>):{'\n'}
+        {'  '}runner = <span style={{ color: '#34d399' }}>SessionWorker</span>.<span style={{ color: '#60a5fa' }}>spawn</span>(isolated=<span style={{ color: '#f59e0b' }}>True</span>, timeout_sec=<span style={{ color: '#f59e0b' }}>5.0</span>){'\n'}
+        {'  '}result = runner.<span style={{ color: '#60a5fa' }}>execute</span>(code=source){'\n'}
+        {'  '}<span style={{ color: '#60a5fa' }}>print</span>{'('}<span style={{ color: '#38bdf8' }}>{'f"Executed in {result.elapsed_ms}ms with exit code 0"'}</span>{')'}{'\n'}
+        {'  '}<span style={{ color: '#c084fc' }}>return</span> result{'\n\n'}
+        <span style={{ color: '#c084fc' }}>if</span> __name__ == <span style={{ color: '#38bdf8' }}>"__main__"</span>:{'\n'}
+        {'  '}<span style={{ color: '#60a5fa' }}>execute_sandbox</span>{'('}<span style={{ color: '#38bdf8' }}>"print('Hello from isolated container!')"</span>{')'}{'\n'}
+      </>
+    )
+  },
+  typescript: {
+    filename: 'index.ts',
+    raw: `// Collaborative Sandbox Engine (CRDT + Docker)
+import { YDoc, AwarenessUser } from 'collab-code';
+
+interface WorkspaceState {
+  readonly roomId: string;
+  user: AwarenessUser;
+}
+
+const doc = new YDoc<WorkspaceState>();
+doc.setAwareness({
+  name: 'Developer',
+  color: '#8b5cf6',
+  cursor: { line: 12, column: 4 }
+});
+
+export const runSandbox = async (code: string): Promise<number> => {
+  return await runner.execute({ code, lang: 'typescript' });
+};`,
+    render: () => (
+      <>
+        <span style={{ color: '#71717a' }}>{'// Collaborative Sandbox Engine (CRDT + Docker)'}</span>{'\n'}
+        <span style={{ color: '#c084fc' }}>import</span> {'{ YDoc, AwarenessUser }'} <span style={{ color: '#c084fc' }}>from</span> <span style={{ color: '#38bdf8' }}>'collab-code'</span>;{'\n\n'}
+        <span style={{ color: '#c084fc' }}>interface</span> <span style={{ color: '#34d399' }}>WorkspaceState</span> {'{'}{'\n'}
+        {'  '}<span style={{ color: '#c084fc' }}>readonly</span> roomId: <span style={{ color: '#60a5fa' }}>string</span>;{'\n'}
+        {'  '}user: <span style={{ color: '#34d399' }}>AwarenessUser</span>;{'\n'}
+        {'}'}{'\n\n'}
+        <span style={{ color: '#c084fc' }}>const</span> <span style={{ color: '#fbbf24' }}>doc</span> = <span style={{ color: '#c084fc' }}>new</span> <span style={{ color: '#34d399' }}>YDoc</span>&lt;<span style={{ color: '#34d399' }}>WorkspaceState</span>&gt;();{'\n'}
+        doc.<span style={{ color: '#60a5fa' }}>setAwareness</span>({'{'}{'\n'}
+        {'  '}name: <span style={{ color: '#38bdf8' }}>'Developer'</span>,{'\n'}
+        {'  '}color: <span style={{ color: '#a78bfa' }}>'#8b5cf6'</span>,{'\n'}
+        {'  '}cursor: {'{ '}line: <span style={{ color: '#f59e0b' }}>12</span>, column: <span style={{ color: '#f59e0b' }}>4</span> {'}'}{'\n'}
+        {'}'});{'\n\n'}
+        <span style={{ color: '#c084fc' }}>export const</span> <span style={{ color: '#60a5fa' }}>runSandbox</span> = <span style={{ color: '#c084fc' }}>async</span> (code: <span style={{ color: '#60a5fa' }}>string</span>): <span style={{ color: '#34d399' }}>Promise</span>&lt;<span style={{ color: '#60a5fa' }}>number</span>&gt; =&gt; {'{'}{'\n'}
+        {'  '}<span style={{ color: '#c084fc' }}>return await</span> runner.<span style={{ color: '#60a5fa' }}>execute</span>({'{ '}code, lang: <span style={{ color: '#38bdf8' }}>'typescript'</span> {'}'});{'\n'}
+        {'}'};
+      </>
+    )
+  },
+  rust: {
+    filename: 'main.rs',
+    raw: `// Collaborative Sandbox Engine (CRDT + Docker)
+use std::time::Instant;
+
+struct Collaborator {
+    username: String,
+    color: &'static str,
+    cursor_pos: (usize, usize),
+}
+
+fn main() {
+    let peer = Collaborator {
+        username: String::from("Developer"),
+        color: "#8b5cf6",
+        cursor_pos: (12, 4),
+    };
+    println!("Peer {} joined CRDT session", peer.username);
+
+    let start = Instant::now();
+    println!("Sandbox execution finished in {:?}", start.elapsed());
+}`,
+    render: () => (
+      <>
+        <span style={{ color: '#71717a' }}>{'// Collaborative Sandbox Engine (CRDT + Docker)'}</span>{'\n'}
+        <span style={{ color: '#c084fc' }}>use</span> std::time::<span style={{ color: '#34d399' }}>Instant</span>;{'\n\n'}
+        <span style={{ color: '#c084fc' }}>struct</span> <span style={{ color: '#34d399' }}>Collaborator</span> {'{'}{'\n'}
+        {'  '}username: <span style={{ color: '#60a5fa' }}>String</span>,{'\n'}
+        {'  '}color: &amp;<span style={{ color: '#c084fc' }}>'static</span> <span style={{ color: '#60a5fa' }}>str</span>,{'\n'}
+        {'  '}cursor_pos: (<span style={{ color: '#60a5fa' }}>usize</span>, <span style={{ color: '#60a5fa' }}>usize</span>),{'\n'}
+        {'}'}{'\n\n'}
+        <span style={{ color: '#c084fc' }}>fn</span> <span style={{ color: '#60a5fa' }}>main</span>() {'{'}{'\n'}
+        {'  '}<span style={{ color: '#c084fc' }}>let</span> peer = <span style={{ color: '#34d399' }}>Collaborator</span> {'{'}{'\n'}
+        {'    '}username: <span style={{ color: '#60a5fa' }}>String</span>::<span style={{ color: '#60a5fa' }}>from</span>(<span style={{ color: '#38bdf8' }}>"Developer"</span>),{'\n'}
+        {'    '}color: <span style={{ color: '#a78bfa' }}>"#8b5cf6"</span>,{'\n'}
+        {'    '}cursor_pos: (<span style={{ color: '#f59e0b' }}>12</span>, <span style={{ color: '#f59e0b' }}>4</span>),{'\n'}
+        {'  '}{'}'};{'\n'}
+        {'  '}<span style={{ color: '#60a5fa' }}>println!</span>{'('}<span style={{ color: '#38bdf8' }}>{'"Peer {} joined CRDT session"'}</span>, peer.username{')'};{'\n\n'}
+        {'  '}<span style={{ color: '#c084fc' }}>let</span> start = <span style={{ color: '#34d399' }}>Instant</span>::<span style={{ color: '#60a5fa' }}>now</span>();{'\n'}
+        {'  '}<span style={{ color: '#60a5fa' }}>println!</span>{'('}<span style={{ color: '#38bdf8' }}>{'"Sandbox execution finished in {:?}"'}</span>, start.<span style={{ color: '#60a5fa' }}>elapsed</span>(){')'};{'\n'}
+        {'}'}
+      </>
+    )
+  },
+  java: {
+    filename: 'Main.java',
+    raw: `// Collaborative Sandbox Engine (CRDT + Docker)
+package com.collabcode.sandbox;
+
+public class Main {
+    public static void main(String[] args) {
+        String peer = "Developer";
+        String color = "#8b5cf6";
+        
+        System.out.println("Syncing Yjs CRDT model for: " + peer);
+        long start = System.currentTimeMillis();
+        
+        // Execute inside container sandbox
+        System.out.println("Sandboxed process exited in " + (System.currentTimeMillis() - start) + "ms");
+    }
+}`,
+    render: () => (
+      <>
+        <span style={{ color: '#71717a' }}>{'// Collaborative Sandbox Engine (CRDT + Docker)'}</span>{'\n'}
+        <span style={{ color: '#c084fc' }}>package</span> <span style={{ color: '#f4f4f5' }}>com.collabcode.sandbox</span>;{'\n\n'}
+        <span style={{ color: '#c084fc' }}>public class</span> <span style={{ color: '#34d399' }}>Main</span> {'{'}{'\n'}
+        {'  '}<span style={{ color: '#c084fc' }}>public static void</span> <span style={{ color: '#60a5fa' }}>main</span>(<span style={{ color: '#34d399' }}>String</span>[] args) {'{'}{'\n'}
+        {'    '}<span style={{ color: '#34d399' }}>String</span> peer = <span style={{ color: '#38bdf8' }}>"Developer"</span>;{'\n'}
+        {'    '}<span style={{ color: '#34d399' }}>String</span> color = <span style={{ color: '#a78bfa' }}>"#8b5cf6"</span>;{'\n\n'}
+        {'    '}<span style={{ color: '#34d399' }}>System</span>.out.<span style={{ color: '#60a5fa' }}>println</span>(<span style={{ color: '#38bdf8' }}>"Syncing Yjs CRDT model for: "</span> + peer);{'\n'}
+        {'    '}<span style={{ color: '#60a5fa' }}>long</span> start = <span style={{ color: '#34d399' }}>System</span>.<span style={{ color: '#60a5fa' }}>currentTimeMillis</span>();{'\n\n'}
+        {'    '}<span style={{ color: '#71717a' }}>{'// Execute inside container sandbox'}</span>{'\n'}
+        {'    '}<span style={{ color: '#34d399' }}>System</span>.out.<span style={{ color: '#60a5fa' }}>println</span>(<span style={{ color: '#38bdf8' }}>"Sandboxed process exited in "</span> + (<span style={{ color: '#34d399' }}>System</span>.<span style={{ color: '#60a5fa' }}>currentTimeMillis</span>() - start) + <span style={{ color: '#38bdf8' }}>"ms"</span>);{'\n'}
+        {'  '}{'}'}{'\n'}
+        {'}'}
+      </>
+    )
+  },
+  cpp: {
+    filename: 'main.cpp',
+    raw: `// Collaborative Sandbox Engine (CRDT + Docker)
+#include <iostream>
+#include <string>
+#include <chrono>
+
+struct PeerPresence {
+    std::string username = "Developer";
+    std::string color = "#8b5cf6";
+};
+
+int main() {
+    PeerPresence peer;
+    std::cout << "CRDT synchronized peer: " << peer.username << std::endl;
+    
+    auto start = std::chrono::high_resolution_clock::now();
+    std::cout << "Sandboxed container execution exited with status 0" << std::endl;
+    return 0;
+}`,
+    render: () => (
+      <>
+        <span style={{ color: '#71717a' }}>{'// Collaborative Sandbox Engine (CRDT + Docker)'}</span>{'\n'}
+        <span style={{ color: '#c084fc' }}>#include</span> <span style={{ color: '#38bdf8' }}>&lt;iostream&gt;</span>{'\n'}
+        <span style={{ color: '#c084fc' }}>#include</span> <span style={{ color: '#38bdf8' }}>&lt;string&gt;</span>{'\n'}
+        <span style={{ color: '#c084fc' }}>#include</span> <span style={{ color: '#38bdf8' }}>&lt;chrono&gt;</span>{'\n\n'}
+        <span style={{ color: '#c084fc' }}>struct</span> <span style={{ color: '#34d399' }}>PeerPresence</span> {'{'}{'\n'}
+        {'  '}std::string username = <span style={{ color: '#38bdf8' }}>"Developer"</span>;{'\n'}
+        {'  '}std::string color = <span style={{ color: '#a78bfa' }}>"#8b5cf6"</span>;{'\n'}
+        {'}'};{'\n\n'}
+        <span style={{ color: '#60a5fa' }}>int</span> <span style={{ color: '#60a5fa' }}>main</span>() {'{'}{'\n'}
+        {'  '}<span style={{ color: '#34d399' }}>PeerPresence</span> peer;{'\n'}
+        {'  '}std::cout &lt;&lt; <span style={{ color: '#38bdf8' }}>"CRDT synchronized peer: "</span> &lt;&lt; peer.username &lt;&lt; std::endl;{'\n\n'}
+        {'  '}<span style={{ color: '#c084fc' }}>auto</span> start = std::chrono::high_resolution_clock::<span style={{ color: '#60a5fa' }}>now</span>();{'\n'}
+        {'  '}std::cout &lt;&lt; <span style={{ color: '#38bdf8' }}>"Sandboxed container execution exited with status 0"</span> &lt;&lt; std::endl;{'\n'}
+        {'  '}<span style={{ color: '#c084fc' }}>return</span> <span style={{ color: '#f59e0b' }}>0</span>;{'\n'}
+        {'}'}
+      </>
+    )
+  }
+};
+
 const HomePage = () => {
   const [activeTab, setActiveTab] = useState('create');
+  const [selectedLanguage, setSelectedLanguage] = useState('javascript');
   const [activeRooms, setActiveRooms] = useState([]);
   const [isLoadingRooms, setIsLoadingRooms] = useState(false);
   const [copiedSnippet, setCopiedSnippet] = useState(false);
@@ -34,25 +309,11 @@ const HomePage = () => {
     navigate(`/room/${randId}`);
   };
 
-  const sampleSnippet = `// Collaborative Sandbox Engine (CRDT + Docker)
-import { YDoc, WebsocketProvider } from 'collab-code';
-
-const doc = new YDoc();
-const awareness = doc.getAwareness();
-
-awareness.setLocalStateField('user', {
-  name: 'Developer',
-  color: '#8b5cf6',
-  cursor: { line: 12, column: 4 }
-});
-
-export async function executeSandbox(source, lang) {
-  return await runner.dispatch({ code: source, language: lang });
-}`;
+  const currentSnippet = LANGUAGE_SNIPPETS[selectedLanguage] || LANGUAGE_SNIPPETS.javascript;
 
   const copySampleCode = async () => {
     try {
-      await navigator.clipboard.writeText(sampleSnippet);
+      await navigator.clipboard.writeText(currentSnippet.raw);
       setCopiedSnippet(true);
       setTimeout(() => setCopiedSnippet(false), 2000);
     } catch (e) {
@@ -224,7 +485,14 @@ export async function executeSandbox(source, lang) {
               </button>
             </div>
 
-            {activeTab === 'create' ? <CreateRoom /> : <JoinRoom />}
+            {activeTab === 'create' ? (
+              <CreateRoom 
+                selectedLanguage={selectedLanguage} 
+                onLanguageChange={setSelectedLanguage} 
+              />
+            ) : (
+              <JoinRoom />
+            )}
           </div>
 
           {/* Right Column: Code Editor Workbench Preview & Active Rooms */}
@@ -241,9 +509,23 @@ export async function executeSandbox(source, lang) {
                 userSelect: 'none',
                 WebkitUserSelect: 'none'
               }}>
-                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', userSelect: 'none' }}>
-                  CODE EDITOR
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', userSelect: 'none' }}>
+                    CODE EDITOR
+                  </span>
+                  <span style={{
+                    fontSize: '0.7rem',
+                    color: '#a78bfa',
+                    background: 'rgba(139, 92, 246, 0.14)',
+                    border: '1px solid rgba(139, 92, 246, 0.35)',
+                    padding: '1px 6px',
+                    borderRadius: '4px',
+                    fontWeight: 600,
+                    letterSpacing: '0.04em'
+                  }}>
+                    {currentSnippet.filename}
+                  </span>
+                </div>
                 <button
                   type="button"
                   onClick={copySampleCode}
@@ -280,18 +562,7 @@ export async function executeSandbox(source, lang) {
                   cursor: 'default'
                 }}>
                   <code style={{ userSelect: 'none', WebkitUserSelect: 'none' }}>
-                    <span style={{ color: '#71717a' }}>{'// Collaborative Sandbox Engine (CRDT + Docker)'}</span>{'\n'}
-                    <span style={{ color: '#c084fc' }}>import</span> {'{ YDoc, WebsocketProvider }'} <span style={{ color: '#c084fc' }}>from</span> <span style={{ color: '#38bdf8' }}>'collab-code'</span>;{'\n\n'}
-                    <span style={{ color: '#c084fc' }}>const</span> <span style={{ color: '#fbbf24' }}>doc</span> = <span style={{ color: '#c084fc' }}>new</span> <span style={{ color: '#34d399' }}>YDoc</span>();{'\n'}
-                    <span style={{ color: '#c084fc' }}>const</span> <span style={{ color: '#fbbf24' }}>awareness</span> = doc.<span style={{ color: '#60a5fa' }}>getAwareness</span>();{'\n\n'}
-                    awareness.<span style={{ color: '#60a5fa' }}>setLocalStateField</span>(<span style={{ color: '#38bdf8' }}>'user'</span>, {'{'}{'\n'}
-                    {'  '}name: <span style={{ color: '#38bdf8' }}>'Developer'</span>,{'\n'}
-                    {'  '}color: <span style={{ color: '#a78bfa' }}>'#8b5cf6'</span>,{'\n'}
-                    {'  '}cursor: {'{ '}line: <span style={{ color: '#f59e0b' }}>12</span>, column: <span style={{ color: '#f59e0b' }}>4</span> {'}'}{'\n'}
-                    {'}'});{'\n\n'}
-                    <span style={{ color: '#c084fc' }}>export async function</span> <span style={{ color: '#60a5fa' }}>executeSandbox</span>(source, lang) {'{'}{'\n'}
-                    {'  '}<span style={{ color: '#c084fc' }}>return await</span> runner.<span style={{ color: '#60a5fa' }}>dispatch</span>({'{ '}code: source, language: lang {'}'});{'\n'}
-                    {'}'}
+                    {currentSnippet.render()}
                   </code>
                 </pre>
               </div>

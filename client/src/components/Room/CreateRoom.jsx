@@ -6,10 +6,12 @@ import { LANGUAGES } from '../../utils/constants';
 import { generateUsername } from '../../utils/helpers';
 import { Sparkles, Dices, ArrowRight, ShieldCheck } from 'lucide-react';
 
-const CreateRoom = () => {
+const CreateRoom = ({ selectedLanguage, onLanguageChange }) => {
   const [name, setName] = useState('');
   const [username, setUsername] = useState(localStorage.getItem('codecollab_username') || generateUsername());
-  const [language, setLanguage] = useState('javascript');
+  const [internalLanguage, setInternalLanguage] = useState('javascript');
+  const language = selectedLanguage !== undefined ? selectedLanguage : internalLanguage;
+  const setLanguage = onLanguageChange || setInternalLanguage;
   const [isInterview, setIsInterview] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
