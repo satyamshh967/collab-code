@@ -277,6 +277,15 @@ select.input {
   background: #8b5cf6;
 }
 
+/* Unselectable utility */
+.unselectable,
+.no-select {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
 /* Yjs CRDT Remote Selection & Cursor Awareness Styling */
 .yRemoteSelection {
   background-color: rgba(139, 92, 246, 0.25);

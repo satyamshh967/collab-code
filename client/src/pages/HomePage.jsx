@@ -230,16 +230,18 @@ export async function executeSandbox(source, lang) {
           {/* Right Column: Code Editor Workbench Preview & Active Rooms */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
             {/* Workbench Code Editor Preview Styled after Reference */}
-            <div className="glass-panel" style={{ overflow: 'hidden' }}>
+            <div className="glass-panel" style={{ overflow: 'hidden', userSelect: 'none', WebkitUserSelect: 'none' }}>
               <div style={{
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
                 padding: '0.65rem 1rem',
                 borderBottom: '1px solid var(--border)',
-                background: '#141418'
+                background: '#141418',
+                userSelect: 'none',
+                WebkitUserSelect: 'none'
               }}>
-                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', userSelect: 'none' }}>
                   CODE EDITOR
                 </span>
                 <button
@@ -255,7 +257,8 @@ export async function executeSandbox(source, lang) {
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '4px'
+                    gap: '4px',
+                    userSelect: 'none'
                   }}
                 >
                   {copiedSnippet ? <Check size={12} color="#10b981" /> : <Copy size={12} />}
@@ -263,15 +266,20 @@ export async function executeSandbox(source, lang) {
                 </button>
               </div>
 
-              <div style={{ padding: '1rem', background: '#111113', overflowX: 'auto' }}>
+              <div style={{ padding: '1rem', background: '#111113', overflowX: 'auto', userSelect: 'none', WebkitUserSelect: 'none' }}>
                 <pre style={{
                   margin: 0,
                   fontFamily: "'Fira Code', 'Consolas', monospace",
                   fontSize: '0.8rem',
                   lineHeight: '1.6',
-                  color: '#e4e4e7'
+                  color: '#e4e4e7',
+                  userSelect: 'none',
+                  WebkitUserSelect: 'none',
+                  MozUserSelect: 'none',
+                  msUserSelect: 'none',
+                  cursor: 'default'
                 }}>
-                  <code>
+                  <code style={{ userSelect: 'none', WebkitUserSelect: 'none' }}>
                     <span style={{ color: '#71717a' }}>{'// Collaborative Sandbox Engine (CRDT + Docker)'}</span>{'\n'}
                     <span style={{ color: '#c084fc' }}>import</span> {'{ YDoc, WebsocketProvider }'} <span style={{ color: '#c084fc' }}>from</span> <span style={{ color: '#38bdf8' }}>'collab-code'</span>;{'\n\n'}
                     <span style={{ color: '#c084fc' }}>const</span> <span style={{ color: '#fbbf24' }}>doc</span> = <span style={{ color: '#c084fc' }}>new</span> <span style={{ color: '#34d399' }}>YDoc</span>();{'\n'}
@@ -290,8 +298,8 @@ export async function executeSandbox(source, lang) {
             </div>
 
             {/* Active Public Rooms */}
-            <div className="glass-panel" style={{ padding: '1.25rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem' }}>
+            <div className="glass-panel" style={{ padding: '1.25rem', userSelect: 'none', WebkitUserSelect: 'none' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem', userSelect: 'none' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <span className="status-dot" />
                   <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
@@ -309,7 +317,8 @@ export async function executeSandbox(source, lang) {
                     display: 'flex',
                     alignItems: 'center',
                     gap: '4px',
-                    fontSize: '0.75rem'
+                    fontSize: '0.75rem',
+                    userSelect: 'none'
                   }}
                 >
                   <RefreshCw size={12} className={isLoadingRooms ? 'spin' : ''} />
@@ -325,7 +334,8 @@ export async function executeSandbox(source, lang) {
                   borderRadius: '6px',
                   border: '1px dashed var(--border)',
                   color: 'var(--text-muted)',
-                  fontSize: '0.82rem'
+                  fontSize: '0.82rem',
+                  userSelect: 'none'
                 }}>
                   No public sessions running. Create a new room to start collaborating!
                 </div>
@@ -344,7 +354,8 @@ export async function executeSandbox(source, lang) {
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
-                        transition: 'all 0.15s ease'
+                        transition: 'all 0.15s ease',
+                        userSelect: 'none'
                       }}
                       onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#8b5cf6'; }}
                       onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}
