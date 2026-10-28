@@ -50,18 +50,19 @@ import (
 	"time"
 )
 
-type Collaborator struct {
-	Username string \`json:"username"\`
-	Color    string \`json:"color"\`
+type Peer struct {
+	Name  string \`json:"name"\`
+	Color string \`json:"color"\`
 }
 
 func main() {
-	peer := Collaborator{Username: "Developer", Color: "#8b5cf6"}
-	fmt.Printf("Connected peer %s to room [awareness active]\\n", peer.Username)
+	peer := Peer{Name: "Developer", Color: "#8b5cf6"}
+	fmt.Println("Synced peer:", peer.Name)
 
 	start := time.Now()
-	// Sandboxed Docker container runner
-	fmt.Printf("Execution completed in %v with exit code 0\\n", time.Since(start))
+	// Sandboxed Docker runner
+	dur := time.Since(start)
+	fmt.Printf("Execution: %v (exit 0)\\n", dur)
 }`,
     render: () => (
       <>
@@ -71,16 +72,17 @@ func main() {
         {'  '}<span style={{ color: '#38bdf8' }}>"fmt"</span>{'\n'}
         {'  '}<span style={{ color: '#38bdf8' }}>"time"</span>{'\n'}
         ){'\n\n'}
-        <span style={{ color: '#c084fc' }}>type</span> <span style={{ color: '#34d399' }}>Collaborator</span> <span style={{ color: '#c084fc' }}>struct</span> {'{'}{'\n'}
-        {'  '}Username <span style={{ color: '#60a5fa' }}>string</span> <span style={{ color: '#38bdf8' }}>`json:"username"`</span>{'\n'}
-        {'  '}Color    <span style={{ color: '#60a5fa' }}>string</span> <span style={{ color: '#38bdf8' }}>`json:"color"`</span>{'\n'}
+        <span style={{ color: '#c084fc' }}>type</span> <span style={{ color: '#34d399' }}>Peer</span> <span style={{ color: '#c084fc' }}>struct</span> {'{'}{'\n'}
+        {'  '}Name  <span style={{ color: '#60a5fa' }}>string</span> <span style={{ color: '#38bdf8' }}>`json:"name"`</span>{'\n'}
+        {'  '}Color <span style={{ color: '#60a5fa' }}>string</span> <span style={{ color: '#38bdf8' }}>`json:"color"`</span>{'\n'}
         {'}'}{'\n\n'}
         <span style={{ color: '#c084fc' }}>func</span> <span style={{ color: '#60a5fa' }}>main</span>() {'{'}{'\n'}
-        {'  '}peer := <span style={{ color: '#34d399' }}>Collaborator</span>{'{'}Username: <span style={{ color: '#38bdf8' }}>"Developer"</span>, Color: <span style={{ color: '#a78bfa' }}>"#8b5cf6"</span>{'}'}{'\n'}
-        {'  '}fmt.<span style={{ color: '#60a5fa' }}>Printf</span>(<span style={{ color: '#38bdf8' }}>"Connected peer %s to room [awareness active]\\n"</span>, peer.Username){'\n\n'}
+        {'  '}peer := <span style={{ color: '#34d399' }}>Peer</span>{'{'}Name: <span style={{ color: '#38bdf8' }}>"Developer"</span>, Color: <span style={{ color: '#a78bfa' }}>"#8b5cf6"</span>{'}'}{'\n'}
+        {'  '}fmt.<span style={{ color: '#60a5fa' }}>Println</span>(<span style={{ color: '#38bdf8' }}>"Synced peer:"</span>, peer.Name){'\n\n'}
         {'  '}start := time.<span style={{ color: '#60a5fa' }}>Now</span>(){'\n'}
-        {'  '}<span style={{ color: '#71717a' }}>{'// Sandboxed Docker container runner'}</span>{'\n'}
-        {'  '}fmt.<span style={{ color: '#60a5fa' }}>Printf</span>(<span style={{ color: '#38bdf8' }}>"Execution completed in %v with exit code 0\\n"</span>, time.<span style={{ color: '#60a5fa' }}>Since</span>(start)){'\n'}
+        {'  '}<span style={{ color: '#71717a' }}>{'// Sandboxed Docker runner'}</span>{'\n'}
+        {'  '}dur := time.<span style={{ color: '#60a5fa' }}>Since</span>(start){'\n'}
+        {'  '}fmt.<span style={{ color: '#60a5fa' }}>Printf</span>(<span style={{ color: '#38bdf8' }}>"Execution: %v (exit 0)\\n"</span>, dur){'\n'}
         {'}'}
       </>
     )
@@ -548,7 +550,7 @@ const HomePage = () => {
                 </button>
               </div>
 
-              <div style={{ padding: '1rem', background: '#111113', overflowX: 'auto', userSelect: 'none', WebkitUserSelect: 'none' }}>
+              <div style={{ padding: '1rem', background: '#111113', overflowX: 'hidden', userSelect: 'none', WebkitUserSelect: 'none' }}>
                 <pre style={{
                   margin: 0,
                   fontFamily: "'Fira Code', 'Consolas', monospace",
@@ -559,9 +561,12 @@ const HomePage = () => {
                   WebkitUserSelect: 'none',
                   MozUserSelect: 'none',
                   msUserSelect: 'none',
-                  cursor: 'default'
+                  cursor: 'default',
+                  overflowX: 'hidden',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word'
                 }}>
-                  <code style={{ userSelect: 'none', WebkitUserSelect: 'none' }}>
+                  <code style={{ userSelect: 'none', WebkitUserSelect: 'none', wordBreak: 'break-word' }}>
                     {currentSnippet.render()}
                   </code>
                 </pre>
