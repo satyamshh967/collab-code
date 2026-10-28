@@ -42,7 +42,7 @@ export async function executeSandbox(source, lang) {
   },
   go: {
     filename: 'main.go',
-    raw: `// Collaborative Sandbox Engine (CRDT + Docker)
+    raw: `// Sandbox Engine (CRDT)
 package main
 
 import (
@@ -51,38 +51,42 @@ import (
 )
 
 type Peer struct {
-	Name  string \`json:"name"\`
-	Color string \`json:"color"\`
+	Name  string
+	Color string
 }
 
 func main() {
-	peer := Peer{Name: "Developer", Color: "#8b5cf6"}
-	fmt.Println("Synced peer:", peer.Name)
+	peer := Peer{
+		Name:  "Dev",
+		Color: "#8b5cf6",
+	}
+	fmt.Println(peer.Name)
 
-	start := time.Now()
-	// Sandboxed Docker runner
-	dur := time.Since(start)
-	fmt.Printf("Execution: %v (exit 0)\\n", dur)
+	t0 := time.Now()
+	dur := time.Since(t0)
+	fmt.Println("Done:", dur)
 }`,
     render: () => (
       <>
-        <span style={{ color: '#71717a' }}>{'// Collaborative Sandbox Engine (CRDT + Docker)'}</span>{'\n'}
+        <span style={{ color: '#71717a' }}>{'// Sandbox Engine (CRDT)'}</span>{'\n'}
         <span style={{ color: '#c084fc' }}>package</span> <span style={{ color: '#f4f4f5' }}>main</span>{'\n\n'}
         <span style={{ color: '#c084fc' }}>import</span> ({'\n'}
         {'  '}<span style={{ color: '#38bdf8' }}>"fmt"</span>{'\n'}
         {'  '}<span style={{ color: '#38bdf8' }}>"time"</span>{'\n'}
         ){'\n\n'}
         <span style={{ color: '#c084fc' }}>type</span> <span style={{ color: '#34d399' }}>Peer</span> <span style={{ color: '#c084fc' }}>struct</span> {'{'}{'\n'}
-        {'  '}Name  <span style={{ color: '#60a5fa' }}>string</span> <span style={{ color: '#38bdf8' }}>`json:"name"`</span>{'\n'}
-        {'  '}Color <span style={{ color: '#60a5fa' }}>string</span> <span style={{ color: '#38bdf8' }}>`json:"color"`</span>{'\n'}
+        {'  '}Name  <span style={{ color: '#60a5fa' }}>string</span>{'\n'}
+        {'  '}Color <span style={{ color: '#60a5fa' }}>string</span>{'\n'}
         {'}'}{'\n\n'}
         <span style={{ color: '#c084fc' }}>func</span> <span style={{ color: '#60a5fa' }}>main</span>() {'{'}{'\n'}
-        {'  '}peer := <span style={{ color: '#34d399' }}>Peer</span>{'{'}Name: <span style={{ color: '#38bdf8' }}>"Developer"</span>, Color: <span style={{ color: '#a78bfa' }}>"#8b5cf6"</span>{'}'}{'\n'}
-        {'  '}fmt.<span style={{ color: '#60a5fa' }}>Println</span>(<span style={{ color: '#38bdf8' }}>"Synced peer:"</span>, peer.Name){'\n\n'}
-        {'  '}start := time.<span style={{ color: '#60a5fa' }}>Now</span>(){'\n'}
-        {'  '}<span style={{ color: '#71717a' }}>{'// Sandboxed Docker runner'}</span>{'\n'}
-        {'  '}dur := time.<span style={{ color: '#60a5fa' }}>Since</span>(start){'\n'}
-        {'  '}fmt.<span style={{ color: '#60a5fa' }}>Printf</span>(<span style={{ color: '#38bdf8' }}>"Execution: %v (exit 0)\\n"</span>, dur){'\n'}
+        {'  '}peer := <span style={{ color: '#34d399' }}>Peer</span>{'{'}{'\n'}
+        {'    '}Name:  <span style={{ color: '#38bdf8' }}>"Dev"</span>,{'\n'}
+        {'    '}Color: <span style={{ color: '#a78bfa' }}>"#8b5cf6"</span>,{'\n'}
+        {'  '}{'}'}{'\n'}
+        {'  '}fmt.<span style={{ color: '#60a5fa' }}>Println</span>(peer.Name){'\n\n'}
+        {'  '}t0 := time.<span style={{ color: '#60a5fa' }}>Now</span>(){'\n'}
+        {'  '}dur := time.<span style={{ color: '#60a5fa' }}>Since</span>(t0){'\n'}
+        {'  '}fmt.<span style={{ color: '#60a5fa' }}>Println</span>(<span style={{ color: '#38bdf8' }}>"Done:"</span>, dur){'\n'}
         {'}'}
       </>
     )
@@ -423,13 +427,16 @@ const HomePage = () => {
         {/* Dashboard 2-Column Grid */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))',
           gap: '1.75rem',
           width: '100%',
-          alignItems: 'start'
+          maxWidth: '100%',
+          alignItems: 'start',
+          minWidth: 0,
+          overflowX: 'clip'
         }}>
           {/* Left Column: Room Setup Card */}
-          <div className="glass-panel" style={{ padding: '1.5rem', background: 'var(--bg-card)' }}>
+          <div className="glass-panel" style={{ padding: '1.5rem', background: 'var(--bg-card)', minWidth: 0, maxWidth: '100%' }}>
             {/* Tab Switcher */}
             <div style={{
               display: 'flex',
@@ -498,9 +505,9 @@ const HomePage = () => {
           </div>
 
           {/* Right Column: Code Editor Workbench Preview & Active Rooms */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', minWidth: 0, width: '100%', maxWidth: '100%', overflowX: 'clip' }}>
             {/* Workbench Code Editor Preview Styled after Reference */}
-            <div className="glass-panel" style={{ overflow: 'hidden', userSelect: 'none', WebkitUserSelect: 'none' }}>
+            <div className="glass-panel" style={{ overflow: 'clip', overflowX: 'clip', minWidth: 0, width: '100%', maxWidth: '100%', userSelect: 'none', WebkitUserSelect: 'none' }}>
               <div style={{
                 display: 'flex',
                 justifyContent: 'space-between',
@@ -550,7 +557,17 @@ const HomePage = () => {
                 </button>
               </div>
 
-              <div style={{ padding: '1rem', background: '#111113', overflowX: 'hidden', userSelect: 'none', WebkitUserSelect: 'none' }}>
+              <div style={{
+                padding: '1rem',
+                background: '#111113',
+                overflow: 'clip',
+                overflowX: 'clip',
+                userSelect: 'none',
+                WebkitUserSelect: 'none',
+                width: '100%',
+                maxWidth: '100%',
+                boxSizing: 'border-box'
+              }}>
                 <pre style={{
                   margin: 0,
                   fontFamily: "'Fira Code', 'Consolas', monospace",
@@ -562,11 +579,26 @@ const HomePage = () => {
                   MozUserSelect: 'none',
                   msUserSelect: 'none',
                   cursor: 'default',
-                  overflowX: 'hidden',
+                  overflow: 'clip',
+                  overflowX: 'clip',
                   whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word'
+                  wordBreak: 'break-all',
+                  overflowWrap: 'anywhere',
+                  width: '100%',
+                  maxWidth: '100%',
+                  boxSizing: 'border-box'
                 }}>
-                  <code style={{ userSelect: 'none', WebkitUserSelect: 'none', wordBreak: 'break-word' }}>
+                  <code style={{
+                    userSelect: 'none',
+                    WebkitUserSelect: 'none',
+                    wordBreak: 'break-all',
+                    overflowWrap: 'anywhere',
+                    whiteSpace: 'pre-wrap',
+                    display: 'block',
+                    width: '100%',
+                    maxWidth: '100%',
+                    boxSizing: 'border-box'
+                  }}>
                     {currentSnippet.render()}
                   </code>
                 </pre>
