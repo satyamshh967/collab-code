@@ -39,9 +39,10 @@ const createMonacoSelectionFromRelativeSelection = (editor, type, relSel, doc, m
   const end = Y.createAbsolutePositionFromRelativePosition(relSel.end, doc);
   if (start !== null && end !== null && start.type === type && end.type === type) {
     const model = editor.getModel();
+    if (!model) return null;
     const startPos = model.getPositionAt(start.index);
     const endPos = model.getPositionAt(end.index);
-    if (monaco && monaco.Selection && typeof monaco.Selection.createWithDirection === 'function') {
+    if (monaco?.Selection?.createWithDirection && typeof relSel.direction === 'number') {
       return monaco.Selection.createWithDirection(
         startPos.lineNumber,
         startPos.column,
@@ -50,28 +51,41 @@ const createMonacoSelectionFromRelativeSelection = (editor, type, relSel, doc, m
         relSel.direction
       );
     }
-    return new monaco.Selection(
-      startPos.lineNumber,
-      startPos.column,
-      endPos.lineNumber,
-      endPos.column
-    );
+    if (monaco?.Selection) {
+      return new monaco.Selection(
+        startPos.lineNumber,
+        startPos.column,
+        endPos.lineNumber,
+        endPos.column
+      );
+    }
+    return {
+      startLineNumber: startPos.lineNumber,
+      startColumn: startPos.column,
+      endLineNumber: endPos.lineNumber,
+      endColumn: endPos.column,
+      selectionStartLineNumber: startPos.lineNumber,
+      selectionStartColumn: startPos.column,
+      positionLineNumber: endPos.lineNumber,
+      positionColumn: endPos.column
+    };
   }
   return null;
 };
 
 export class MonacoBinding {
-  constructor(ytext, monacoModel, editors = new Set(), awareness = null, monaco = window.monaco) {
+  constructor(ytext, monacoModel, editors = new Set(), awareness = null, monaco = (typeof window !== 'undefined' ? window.monaco : null)) {
     this.doc = ytext.doc;
     this.ytext = ytext;
     this.monacoModel = monacoModel;
     this.editors = editors;
-    this.monaco = monaco;
+    this.monaco = monaco || (typeof window !== 'undefined' ? window.monaco : null);
     this.awareness = awareness;
     this.mux = createMutex();
     this._isApplyingRemote = false;
     this._savedSelections = new Map();
     this._decorations = new Map();
+    this._editorDisposables = [];
 
     // Preserve local selection across incoming remote transactions
     this._beforeTransaction = () => {
@@ -189,13 +203,20 @@ export class MonacoBinding {
               beforeContentClassName = `yRemoteSelectionHead yRemoteSelectionHead-${clientID}`;
             }
 
+            const RangeClass = this.monaco?.Range || (typeof window !== 'undefined' ? window.monaco?.Range : null);
+            const range = RangeClass
+              ? new RangeClass(start.lineNumber, start.column, end.lineNumber, end.column)
+              : { startLineNumber: start.lineNumber, startColumn: start.column, endLineNumber: end.lineNumber, endColumn: end.column };
+
+            const stickiness = this.monaco?.editor?.TrackedRangeStickiness?.NeverGrowsWhenTypingAtEdges ?? 1;
+
             newDecorations.push({
-              range: new this.monaco.Range(start.lineNumber, start.column, end.lineNumber, end.column),
+              range,
               options: {
                 className: `yRemoteSelection yRemoteSelection-${clientID}`,
                 afterContentClassName,
                 beforeContentClassName,
-                stickiness: this.monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
+                stickiness
               }
             });
           }
@@ -207,6 +228,7 @@ export class MonacoBinding {
 
     // Apply remote CRDT changes to Monaco without moving local user's cursor
     this._ytextObserver = (event) => {
+      if (event.transaction.origin === this) return;
       this._isApplyingRemote = true;
       try {
         this.mux(() => {
@@ -216,14 +238,20 @@ export class MonacoBinding {
               index += op.retain;
             } else if (op.insert !== undefined) {
               const pos = monacoModel.getPositionAt(index);
-              const range = new this.monaco.Selection(pos.lineNumber, pos.column, pos.lineNumber, pos.column);
+              const RangeClass = this.monaco?.Range || (typeof window !== 'undefined' ? window.monaco?.Range : null);
+              const range = RangeClass
+                ? new RangeClass(pos.lineNumber, pos.column, pos.lineNumber, pos.column)
+                : { startLineNumber: pos.lineNumber, startColumn: pos.column, endLineNumber: pos.lineNumber, endColumn: pos.column };
               const insert = op.insert;
-              monacoModel.applyEdits([{ range, text: insert }]);
+              monacoModel.applyEdits([{ range, text: insert, forceMoveMarkers: true }]);
               index += insert.length;
             } else if (op.delete !== undefined) {
               const pos = monacoModel.getPositionAt(index);
               const endPos = monacoModel.getPositionAt(index + op.delete);
-              const range = new this.monaco.Selection(pos.lineNumber, pos.column, endPos.lineNumber, endPos.column);
+              const RangeClass = this.monaco?.Range || (typeof window !== 'undefined' ? window.monaco?.Range : null);
+              const range = RangeClass
+                ? new RangeClass(pos.lineNumber, pos.column, endPos.lineNumber, endPos.column)
+                : { startLineNumber: pos.lineNumber, startColumn: pos.column, endLineNumber: endPos.lineNumber, endColumn: endPos.column };
               monacoModel.applyEdits([{ range, text: '' }]);
             }
           });
@@ -279,7 +307,10 @@ export class MonacoBinding {
             let anchor = monacoModel.getOffsetAt(sel.getStartPosition());
             let head = monacoModel.getOffsetAt(sel.getEndPosition());
 
-            if (this.monaco.SelectionDirection && sel.getDirection() === this.monaco.SelectionDirection.RTL) {
+            const isRTL = sel.getDirection?.() === 1 ||
+              (this.monaco?.SelectionDirection && sel.getDirection?.() === this.monaco.SelectionDirection.RTL);
+
+            if (isRTL) {
               const tmp = anchor;
               anchor = head;
               head = tmp;
@@ -294,7 +325,8 @@ export class MonacoBinding {
       };
 
       editors.forEach((editor) => {
-        editor.onDidChangeCursorSelection(broadcastSelection);
+        const disposable = editor.onDidChangeCursorSelection(broadcastSelection);
+        this._editorDisposables.push(disposable);
       });
 
       // Broadcast initial cursor position right away
@@ -308,6 +340,8 @@ export class MonacoBinding {
   }
 
   destroy() {
+    this._editorDisposables.forEach((disp) => disp?.dispose?.());
+    this._editorDisposables = [];
     this._monacoChangeHandler?.dispose();
     this._monacoDisposeHandler?.dispose();
     this.ytext.unobserve(this._ytextObserver);
