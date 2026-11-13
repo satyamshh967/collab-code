@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   redis:
     image: redis:7-alpine
@@ -69,6 +67,26 @@ services:
       - server
     networks:
       - collab-network
+
+  # Sandbox runner images used by the execution service for each run.
+  # Build them once with:  docker compose --profile runners build
+  node-runner:
+    build:
+      context: ./node
+    image: collab-node-runner
+    profiles: ["runners"]
+
+  python-runner:
+    build:
+      context: ./python
+    image: collab-python-runner
+    profiles: ["runners"]
+
+  java-runner:
+    build:
+      context: ./java
+    image: collab-java-runner
+    profiles: ["runners"]
 
 networks:
   collab-network:

@@ -2,9 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
-import { executeJava } from './runners/javaRunner.js';
-import { executePython } from './runners/pythonRunner.js';
-import { executeJavascript } from './runners/javascriptRunner.js';
+import { executeCode } from './runners/index.js';
 import { validateCode } from './sandbox/securityPolicy.js';
 import { startExecutionWorker } from './worker/executionWorker.js';
 
@@ -23,9 +21,9 @@ app.get('/health', (req, res) => {
 
 // Direct execution endpoint (fallback / synchronous proxy)
 app.post('/execute', async (req, res) => {
-  const { code, language, stdin = '' } = req.body;
+  const { code, language, stdin = '' } = req.body || {};
 
-  if (!code || !language) {
+  if (typeof code !== 'string' || !code || typeof language !== 'string' || !language) {
     return res.status(400).json({ error: 'Code and language are required' });
   }
 
@@ -35,27 +33,11 @@ app.post('/execute', async (req, res) => {
   }
 
   try {
-    let result;
-    switch (language.toLowerCase()) {
-      case 'java':
-        result = await executeJava(code, stdin);
-        break;
-      case 'python':
-      case 'py':
-        result = await executePython(code, stdin);
-        break;
-      case 'javascript':
-      case 'js':
-        result = await executeJavascript(code, stdin);
-        break;
-      default:
-        return res.status(400).json({ error: 'Unsupported language' });
-    }
-
+    const result = await executeCode(language, code, typeof stdin === 'string' ? stdin : '');
     res.json(result);
   } catch (error) {
     console.error('Execution error:', error);
-    res.status(500).json({ error: 'Internal server error during execution', details: error.message });
+    res.status(500).json({ error: 'Internal server error during execution' });
   }
 });
 

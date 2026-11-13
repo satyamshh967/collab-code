@@ -1,8 +1,6 @@
 import { Worker } from 'bullmq';
 import Redis from 'ioredis';
-import { executeJavascript } from '../runners/javascriptRunner.js';
-import { executePython } from '../runners/pythonRunner.js';
-import { executeJava } from '../runners/javaRunner.js';
+import { executeCode } from '../runners/index.js';
 import { validateCode } from '../sandbox/securityPolicy.js';
 
 const QUEUE_NAME = 'code-execution';
@@ -84,22 +82,7 @@ export const startExecutionWorker = async () => {
           broadcastEvent(roomId, job.id, 'output', { chunk, type });
         };
 
-        let result;
-        switch (language.toLowerCase()) {
-          case 'java':
-            result = await executeJava(code, stdin, onChunk);
-            break;
-          case 'python':
-          case 'py':
-            result = await executePython(code, stdin, onChunk);
-            break;
-          case 'javascript':
-          case 'js':
-            result = await executeJavascript(code, stdin, onChunk);
-            break;
-          default:
-            throw new Error(`Unsupported execution language: ${language}`);
-        }
+        const result = await executeCode(language, code, stdin, onChunk);
 
         const isFailed = result.exitCode !== 0;
         await broadcastEvent(roomId, job.id, 'result', {

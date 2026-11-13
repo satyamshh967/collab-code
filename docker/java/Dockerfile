@@ -1,4 +1,4 @@
-FROM openjdk:17-slim
+FROM eclipse-temurin:17-jdk-jammy
 
 RUN useradd -m runner && \
     mkdir /sandbox && \
@@ -7,4 +7,4 @@ RUN useradd -m runner && \
 USER runner
 WORKDIR /sandbox
 
-# Disabling network is handled in DockerManager config via network: none
+# Network isolation, memory/CPU/pid caps are applied by DockerManager at run time
