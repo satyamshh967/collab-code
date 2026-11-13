@@ -4,11 +4,12 @@ import { api } from '../../services/api';
 import toast from 'react-hot-toast';
 import { LANGUAGES } from '../../utils/constants';
 import { generateUsername } from '../../utils/helpers';
+import { getUsername, setUsername as saveUsername } from '../../utils/storage';
 import { Sparkles, Dices, ArrowRight, ShieldCheck } from 'lucide-react';
 
 const CreateRoom = ({ selectedLanguage, onLanguageChange }) => {
   const [name, setName] = useState('');
-  const [username, setUsername] = useState(localStorage.getItem('codecollab_username') || generateUsername());
+  const [username, setUsername] = useState(() => getUsername() || generateUsername());
   const [internalLanguage, setInternalLanguage] = useState('javascript');
   const language = selectedLanguage !== undefined ? selectedLanguage : internalLanguage;
   const setLanguage = onLanguageChange || setInternalLanguage;
@@ -31,7 +32,7 @@ const CreateRoom = ({ selectedLanguage, onLanguageChange }) => {
 
     setIsLoading(true);
     try {
-      localStorage.setItem('codecollab_username', username.trim() || generateUsername());
+      saveUsername(username.trim().slice(0, 32) || generateUsername());
       const room = await api.createRoom({ name: name.trim(), language, isInterview });
       toast.success('Room created successfully! 🎉');
       navigate(`/room/${room.id || room.roomId}`);

@@ -1,6 +1,7 @@
 import React from 'react';
 import { useRoom } from '../../hooks/useRoom';
 import { COLORS } from '../../utils/constants';
+import { getUsername } from '../../utils/storage';
 import { Crown, Copy } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -9,7 +10,7 @@ const UsersList = () => {
 
   const displayUsers = users.length > 0 
     ? users 
-    : [{ username: localStorage.getItem('codecollab_username') || 'Guest', color: '#38bdf8' }];
+    : [{ username: getUsername() || 'Guest', color: '#38bdf8' }];
 
   const handleCopyUsername = (username) => {
     navigator.clipboard.writeText(username);

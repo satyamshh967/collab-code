@@ -1,9 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import CreateRoom from '../components/Room/CreateRoom';
 import JoinRoom from '../components/Room/JoinRoom';
 import { api } from '../services/api';
-import { Sparkles, Users, ArrowRight, Zap, RefreshCw, Copy, Check } from 'lucide-react';
+import { getRecentRooms, forgetRoom, generateRoomId } from '../utils/storage';
+import { Sparkles, Users, ArrowRight, Zap, RefreshCw, Copy, Check, History, X } from 'lucide-react';
+
+const timeAgo = (ts) => {
+  const s = Math.max(1, Math.round((Date.now() - ts) / 1000));
+  if (s < 60) return 'just now';
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.round(h / 24)}d ago`;
+};
 
 const LANGUAGE_SNIPPETS = {
   javascript: {
@@ -291,29 +302,55 @@ const HomePage = () => {
   const [activeRooms, setActiveRooms] = useState([]);
   const [isLoadingRooms, setIsLoadingRooms] = useState(false);
   const [copiedSnippet, setCopiedSnippet] = useState(false);
+  const [roomsError, setRoomsError] = useState(false);
+  const [recentRooms, setRecentRooms] = useState(getRecentRooms);
+  const [isStartingScratchpad, setIsStartingScratchpad] = useState(false);
   const navigate = useNavigate();
 
-  const fetchRooms = async () => {
+  const fetchRooms = useCallback(async () => {
     setIsLoadingRooms(true);
     try {
       const rooms = await api.getRooms();
-      setActiveRooms(rooms || []);
+      // Busiest rooms first; empty rooms are shown as idle at the bottom
+      const sorted = (rooms || []).slice().sort((a, b) => (b.usersCount || 0) - (a.usersCount || 0));
+      setActiveRooms(sorted);
+      setRoomsError(false);
     } catch (e) {
-      setActiveRooms([]);
+      setRoomsError(true);
     } finally {
       setIsLoadingRooms(false);
     }
-  };
-
-  useEffect(() => {
-    fetchRooms();
   }, []);
 
-  const handleInstantScratchpad = () => {
-    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-    const randId = `${Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')}-${Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')}`;
-    navigate(`/room/${randId}`);
+  // Keep the list fresh while the page is visible
+  useEffect(() => {
+    fetchRooms();
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchRooms();
+    }, 15000);
+    return () => clearInterval(timer);
+  }, [fetchRooms]);
+
+  // Scratchpads open instantly in the language picked on this page
+  const handleInstantScratchpad = async () => {
+    setIsStartingScratchpad(true);
+    try {
+      const room = await api.createRoom({ name: 'Scratchpad', language: selectedLanguage });
+      navigate(`/room/${room.id || room.roomId}`);
+    } catch (e) {
+      navigate(`/room/${generateRoomId()}`); // offline API: an ad-hoc room still works
+    } finally {
+      setIsStartingScratchpad(false);
+    }
   };
+
+  const handleForgetRoom = (e, id) => {
+    e.stopPropagation();
+    forgetRoom(id);
+    setRecentRooms(getRecentRooms());
+  };
+
+  const liveCounts = new Map(activeRooms.map((r) => [r.id, r.usersCount || 0]));
 
   const currentSnippet = LANGUAGE_SNIPPETS[selectedLanguage] || LANGUAGE_SNIPPETS.javascript;
 
@@ -376,9 +413,11 @@ const HomePage = () => {
           <button
             className="btn"
             onClick={handleInstantScratchpad}
+            disabled={isStartingScratchpad}
             style={{ fontSize: '0.8rem', padding: '0.4rem 0.85rem', borderRadius: '6px' }}
+            title="Open a new room right away and share the link"
           >
-            <Zap size={14} color="#a78bfa" />
+            {isStartingScratchpad ? <span className="spinner" style={{ width: 14, height: 14 }} /> : <Zap size={14} color="#a78bfa" />}
             <span>Instant Scratchpad</span>
           </button>
         </div>
@@ -605,13 +644,54 @@ const HomePage = () => {
               </div>
             </div>
 
+            {/* Recently visited rooms (this browser only) */}
+            {recentRooms.length > 0 && (
+              <div className="glass-panel" style={{ padding: '1.25rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.85rem' }}>
+                  <History size={13} color="var(--text-muted)" />
+                  <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                    Jump back in
+                  </span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                  {recentRooms.map((room) => {
+                    const online = liveCounts.get(room.id) || 0;
+                    return (
+                      <div
+                        key={room.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => navigate(`/room/${room.id}`)}
+                        onKeyDown={(e) => e.key === 'Enter' && navigate(`/room/${room.id}`)}
+                        className="recent-room"
+                        style={{ padding: '0.6rem 0.85rem', background: '#141418', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}
+                      >
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontWeight: 600, fontSize: '0.86rem', color: '#f4f4f5', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{room.name}</div>
+                          <div style={{ display: 'flex', gap: '0.5rem', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                            <span style={{ color: '#a78bfa', fontWeight: 600, textTransform: 'uppercase' }}>{room.language}</span>
+                            <span>•</span>
+                            <span>{timeAgo(room.visitedAt)}</span>
+                            {online > 0 && <><span>•</span><span style={{ color: '#10b981' }}>{online} online</span></>}
+                          </div>
+                        </div>
+                        <button className="icon-btn" style={{ height: 24, minWidth: 24, padding: 0 }} onClick={(e) => handleForgetRoom(e, room.id)} title="Remove from this list" aria-label={`Remove ${room.name} from recent rooms`}>
+                          <X size={13} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Active Public Rooms */}
             <div className="glass-panel" style={{ padding: '1.25rem', userSelect: 'none', WebkitUserSelect: 'none' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem', userSelect: 'none' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <span className="status-dot" />
                   <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                    ACTIVE WORKSPACES ({activeRooms.length})
+                    LIVE ROOMS ({activeRooms.filter((r) => r.usersCount > 0).length} active)
                   </span>
                 </div>
                 <button
@@ -634,7 +714,11 @@ const HomePage = () => {
                 </button>
               </div>
 
-              {activeRooms.length === 0 ? (
+              {roomsError ? (
+                <div style={{ padding: '1.25rem', textAlign: 'center', background: 'rgba(239, 68, 68, 0.06)', borderRadius: '6px', border: '1px dashed rgba(239, 68, 68, 0.3)', color: '#fca5a5', fontSize: '0.82rem' }}>
+                  Can't reach the server right now. Retrying automatically...
+                </div>
+              ) : activeRooms.length === 0 ? (
                 <div style={{
                   padding: '1.5rem',
                   textAlign: 'center',
@@ -675,7 +759,10 @@ const HomePage = () => {
                         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                           <span style={{ color: '#a78bfa', fontWeight: 600, textTransform: 'uppercase' }}>{room.language}</span>
                           <span>•</span>
-                          <span style={{ color: '#10b981' }}>{room.usersCount || 1} online</span>
+                          {room.usersCount > 0
+                            ? <span style={{ color: '#10b981' }}>{room.usersCount} online</span>
+                            : <span>idle</span>}
+                          {room.isInterviewRoom && <><span>•</span><span style={{ color: '#fbbf24' }}>interview</span></>}
                         </div>
                       </div>
                       <ArrowRight size={14} color="#a78bfa" />

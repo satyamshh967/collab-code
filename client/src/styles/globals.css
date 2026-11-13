@@ -685,3 +685,6 @@ kbd, .kbd {
     transition-duration: 0.01ms !important;
   }
 }
+
+.recent-room { transition: border-color 0.15s ease; }
+.recent-room:hover, .recent-room:focus-visible { border-color: var(--accent) !important; }

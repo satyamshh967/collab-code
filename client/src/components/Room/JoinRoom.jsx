@@ -1,12 +1,20 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { generateUsername } from '../../utils/helpers';
+import { ROOM_ID_PATTERN, getUsername, setUsername as saveUsername } from '../../utils/storage';
 import toast from 'react-hot-toast';
 import { LogIn, Clipboard, Dices, ArrowRight } from 'lucide-react';
 
+// Accepts a bare room code or a full invite link
+const extractRoomId = (text) => {
+  const trimmed = (text || '').trim();
+  const match = trimmed.match(/\/room\/([A-Za-z0-9_-]+)/);
+  return match ? match[1] : trimmed.replace(/^#/, '');
+};
+
 const JoinRoom = () => {
   const [roomId, setRoomId] = useState('');
-  const [username, setUsername] = useState(localStorage.getItem('codecollab_username') || generateUsername());
+  const [username, setUsername] = useState(() => getUsername() || generateUsername());
   const navigate = useNavigate();
 
   const handleRandomizeName = () => {
@@ -18,14 +26,10 @@ const JoinRoom = () => {
   const handlePaste = async () => {
     try {
       const text = await navigator.clipboard.readText();
-      // If full URL was pasted, extract room ID
-      const match = text.match(/\/room\/([a-zA-Z0-9_-]+)/);
-      if (match && match[1]) {
-        setRoomId(match[1]);
-        toast.success('Pasted Room ID from invite link!');
-      } else if (text.trim()) {
-        setRoomId(text.trim());
-        toast.success('Pasted from clipboard!');
+      const id = extractRoomId(text);
+      if (id) {
+        setRoomId(id);
+        toast.success('Pasted room code');
       }
     } catch (e) {
       toast.error('Unable to read clipboard');
@@ -34,12 +38,17 @@ const JoinRoom = () => {
 
   const handleJoin = (e) => {
     e.preventDefault();
-    if (!roomId.trim() || !username.trim()) {
-      toast.error('Room ID and Username are required');
+    const id = extractRoomId(roomId);
+    if (!id || !username.trim()) {
+      toast.error('Room code and display name are required');
       return;
     }
-    localStorage.setItem('codecollab_username', username.trim());
-    navigate(`/room/${roomId.trim()}`);
+    if (!ROOM_ID_PATTERN.test(id)) {
+      toast.error('Room codes use only letters, numbers, - and _');
+      return;
+    }
+    saveUsername(username.trim().slice(0, 32));
+    navigate(`/room/${id}`);
   };
 
   return (
@@ -66,7 +75,7 @@ const JoinRoom = () => {
             className="input" 
             placeholder="e.g. d412-4123" 
             value={roomId} 
-            onChange={e => setRoomId(e.target.value)} 
+            onChange={e => setRoomId(extractRoomId(e.target.value))} 
             required 
             style={{ paddingLeft: '28px', fontFamily: 'monospace' }}
           />
