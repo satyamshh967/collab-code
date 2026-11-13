@@ -86,7 +86,7 @@
 |   |  - Network Isolation: --network=none (no egress/ingress traffic)                               |   |
 |   |  - Buffer Cap:        512 KB maximum stdout/stderr limit (anti-memory exhaustion)              |   |
 |   |                                                                                                |   |
-|   |       [ Python Runner ]             [ Node.js Runner ]             [ OpenJDK 17 Runner ]       |   |
+|   |       [ Python Runner ]             [ Node.js Runner ]             [ Temurin 17 Runner ]       |   |
 |   +------------------------------------------------------------------------------------------------+   |
 +--------------------------------------------------------------------------------------------------------+
 ```
@@ -131,9 +131,7 @@
 
 2. **Build the language runner sandbox images**:
    ```bash
-   docker build -t collab-python-runner ./docker/python
-   docker build -t collab-java-runner ./docker/java
-   docker build -t collab-node-runner ./docker/node
+   docker compose -f docker/docker-compose.yml --profile runners build
    ```
 
 3. **Start the multi-service stack with Docker Compose**:
@@ -200,7 +198,17 @@ npm run test:queue
 
 # 3. Verify sandbox confinement (5s infinite loop kill, 512KB buffer cap, security rules)
 npm run test:sandbox
+
+# 4. Boot the real server and verify Yjs sync, socket.io room handlers and the execute API
+#    (requires `npm install` in client/ for socket.io-client)
+npm run test:server
+
+# Client unit tests
+cd client && npm test -- --watchAll=false
 ```
+
+> Code execution currently supports **JavaScript, Python and Java**. Other languages in the
+> editor (TypeScript, C++, Go, Rust) get syntax highlighting and collaboration, but Run is disabled.
 
 ---
 
