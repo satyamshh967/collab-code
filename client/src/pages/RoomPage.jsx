@@ -1,5 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { MessageSquare, Users, Camera } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useRoom } from '../hooks/useRoom';
 import { useSocket } from '../hooks/useSocket';
 import CodeEditor from '../components/Editor/CodeEditor';
@@ -8,111 +10,240 @@ import ChatPanel from '../components/Chat/ChatPanel';
 import UsersList from '../components/Sidebar/UsersList';
 import SnapshotPanel from '../components/Sidebar/SnapshotPanel';
 import Header from '../components/Layout/Header';
+import StatusBar from '../components/Layout/StatusBar';
 import InterviewBanner from '../components/Layout/InterviewBanner';
-import { MessageSquare, Users, Camera } from 'lucide-react';
+import ShortcutsModal from '../components/Layout/ShortcutsModal';
+import {
+  ROOM_ID_PATTERN, getOrCreateUsername, rememberRoom,
+  getEditorSettings, saveEditorSettings, getLayout, saveLayout
+} from '../utils/storage';
+
+const MIN_OUTPUT_HEIGHT = 38;   // collapsed: toolbar only
+const MIN_EDITOR_HEIGHT = 140;
 
 const RoomPage = () => {
   const { roomId } = useParams();
-  const { joinRoom, leaveRoom, isInterviewRoom, users, chatMessages, snapshots } = useRoom();
+  const navigate = useNavigate();
+  const {
+    joinRoom, leaveRoom, isInterviewRoom, users, chatMessages, snapshots,
+    roomInfo, saveSnapshot
+  } = useRoom();
   const { isConnected } = useSocket();
+
   const [activeTab, setActiveTab] = useState('chat');
+  const [layout, setLayout] = useState(getLayout);
+  const [editorSettings, setEditorSettings] = useState(getEditorSettings);
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const mainRef = useRef(null);
+
+  const isValidRoom = ROOM_ID_PATTERN.test(roomId || '');
+
+  // Bad URLs (e.g. /room/hello world) go back home instead of a broken workspace
+  useEffect(() => {
+    if (!isValidRoom) {
+      toast.error('That room link is not valid');
+      navigate('/', { replace: true });
+    }
+  }, [isValidRoom, navigate]);
+
+  // Join on mount and again after every reconnect (isConnected flips back to true)
+  useEffect(() => {
+    if (!isValidRoom || !isConnected) return undefined;
+    joinRoom(roomId, getOrCreateUsername());
+    return () => leaveRoom();
+  }, [roomId, isValidRoom, joinRoom, leaveRoom, isConnected]);
 
   useEffect(() => {
-    const username = localStorage.getItem('codecollab_username') || `Guest_${Math.floor(Math.random() * 1000)}`;
-    
-    if (isConnected) {
-      joinRoom(roomId, username);
+    if (roomInfo?.id === roomId) {
+      rememberRoom({ id: roomInfo.id, name: roomInfo.name, language: roomInfo.language });
+      document.title = `${roomInfo.name} · CodeCollab`;
     }
-    
-    return () => {
-      leaveRoom();
+    return () => { document.title = 'CodeCollab'; };
+  }, [roomInfo, roomId]);
+
+  // ---- Unread chat counter -------------------------------------------------
+  const chatVisible = layout.sidebarOpen && activeTab === 'chat';
+  const seenCountRef = useRef(0);
+  const [unread, setUnread] = useState(0);
+  // History delivered on join counts as already seen (declared first so it
+  // runs before the counter below in the same commit)
+  useEffect(() => {
+    seenCountRef.current = (roomInfo?.chatMessages || []).filter((m) => m.type === 'message').length;
+  }, [roomInfo]);
+  useEffect(() => {
+    const userMessages = chatMessages.filter((m) => m.type === 'message').length;
+    if (chatVisible || userMessages < seenCountRef.current) {
+      seenCountRef.current = userMessages;
+      setUnread(0);
+    } else {
+      setUnread(userMessages - seenCountRef.current);
+    }
+  }, [chatMessages, chatVisible]);
+
+  // ---- Persisted layout & editor settings ----------------------------------
+  const updateLayout = useCallback((patch) => {
+    setLayout((prev) => {
+      const next = { ...prev, ...patch };
+      saveLayout(next);
+      return next;
+    });
+  }, []);
+
+  const updateEditorSettings = useCallback((patch) => {
+    setEditorSettings((prev) => {
+      const next = { ...prev, ...patch };
+      saveEditorSettings(next);
+      return next;
+    });
+  }, []);
+
+  const toggleSidebar = useCallback(() => updateLayout({ sidebarOpen: !layout.sidebarOpen }), [layout.sidebarOpen, updateLayout]);
+
+  const openTab = useCallback((tab) => {
+    setActiveTab(tab);
+    updateLayout({ sidebarOpen: true });
+  }, [updateLayout]);
+
+  const toggleOutput = useCallback(() => {
+    updateLayout({ outputHeight: layout.outputHeight <= MIN_OUTPUT_HEIGHT ? 260 : MIN_OUTPUT_HEIGHT });
+  }, [layout.outputHeight, updateLayout]);
+
+  // ---- Drag to resize the output panel -------------------------------------
+  const startResize = (e) => {
+    e.preventDefault();
+    const main = mainRef.current;
+    if (!main) return;
+    setIsDragging(true);
+    const rect = main.getBoundingClientRect();
+
+    const onMove = (ev) => {
+      const clientY = ev.touches ? ev.touches[0].clientY : ev.clientY;
+      const max = rect.height - MIN_EDITOR_HEIGHT;
+      const height = Math.max(MIN_OUTPUT_HEIGHT, Math.min(max, rect.bottom - clientY));
+      setLayout((prev) => ({ ...prev, outputHeight: Math.round(height) }));
     };
-  }, [roomId, joinRoom, leaveRoom, isConnected]);
+    const onUp = () => {
+      setIsDragging(false);
+      setLayout((prev) => { saveLayout(prev); return prev; });
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  };
+
+  // ---- Global shortcuts (Ctrl+Enter to run lives in OutputPanel) -----------
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      const mod = e.ctrlKey || e.metaKey;
+      const key = e.key.toLowerCase();
+      const typingInField = ['INPUT', 'TEXTAREA'].includes(e.target?.tagName);
+
+      if (mod && key === 's') {
+        e.preventDefault();
+        e.stopPropagation();
+        const label = `Checkpoint ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+        saveSnapshot(label);
+      } else if (mod && key === 'b') {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleSidebar();
+      } else if (mod && key === 'j') {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleOutput();
+      } else if (mod && e.shiftKey && key === 'm') {
+        e.preventDefault();
+        openTab('chat');
+      } else if (key === '?' && !typingInField && !e.target?.closest?.('.monaco-editor')) {
+        e.preventDefault();
+        setShowShortcuts(true);
+      } else if (key === 'escape') {
+        setShowShortcuts(false);
+      }
+    };
+    // Capture phase so these win over Monaco's own bindings
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [saveSnapshot, toggleSidebar, toggleOutput, openTab]);
+
+  if (!isValidRoom) return null;
+
+  const tabs = [
+    { id: 'chat', label: 'Chat', icon: MessageSquare, count: unread, accent: unread > 0 },
+    { id: 'users', label: 'People', icon: Users, count: users.length },
+    { id: 'snapshots', label: 'Snapshots', icon: Camera, count: snapshots.length }
+  ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100%', maxWidth: '100%', overflow: 'hidden', background: 'var(--bg-primary)' }}>
-      <Header />
+    <div className="workspace">
+      <Header
+        sidebarOpen={layout.sidebarOpen}
+        onToggleSidebar={toggleSidebar}
+        editorSettings={editorSettings}
+        onEditorSettingsChange={updateEditorSettings}
+        onShowShortcuts={() => setShowShortcuts(true)}
+      />
       {isInterviewRoom && <InterviewBanner />}
-      
-      <div style={{ display: 'flex', flex: 1, width: '100%', minWidth: 0, overflow: 'hidden' }}>
-        {/* Editor and Terminal (Flexible Main Area) */}
-        <div style={{ flex: '1 1 auto', minWidth: 0, width: 0, display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border)', overflow: 'hidden' }}>
-          <div style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
-            <CodeEditor />
+
+      <div className="workspace-body">
+        <div className="workspace-main" ref={mainRef}>
+          <div className="editor-pane">
+            <CodeEditor settings={editorSettings} />
           </div>
-          <OutputPanel />
+          <div
+            className={`resize-handle ${isDragging ? 'dragging' : ''}`}
+            onPointerDown={startResize}
+            onDoubleClick={toggleOutput}
+            role="separator"
+            aria-orientation="horizontal"
+            aria-label="Resize output panel (double-click to collapse)"
+            title="Drag to resize · double-click to collapse"
+          />
+          <OutputPanel
+            height={layout.outputHeight}
+            collapsed={layout.outputHeight <= MIN_OUTPUT_HEIGHT}
+            onToggleCollapse={toggleOutput}
+          />
         </div>
 
-        {/* Sidebar Tabs (Right Fixed Pane) */}
-        <div style={{ flex: '0 0 340px', width: '340px', minWidth: '280px', maxWidth: '380px', display: 'flex', flexDirection: 'column', background: 'var(--bg-secondary)', borderLeft: '1px solid var(--border)', overflow: 'hidden' }}>
-          {/* Tab Navigation Header */}
-          <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', background: '#141418' }}>
-            <button 
-              onClick={() => setActiveTab('chat')} 
-              style={tabStyle(activeTab === 'chat')}
-            >
-              <MessageSquare size={14} />
-              <span>Chat</span>
-              {chatMessages.length > 0 && (
-                <span style={{ fontSize: '10px', background: activeTab === 'chat' ? 'rgba(139, 92, 246, 0.25)' : '#1f1f26', color: activeTab === 'chat' ? '#c4b5fd' : 'var(--text-muted)', padding: '1px 5px', borderRadius: '4px', fontWeight: 600 }}>
-                  {chatMessages.length}
-                </span>
-              )}
-            </button>
-
-            <button 
-              onClick={() => setActiveTab('users')} 
-              style={tabStyle(activeTab === 'users')}
-            >
-              <Users size={14} />
-              <span>Users</span>
-              <span style={{ fontSize: '10px', background: activeTab === 'users' ? 'rgba(16, 185, 129, 0.2)' : '#1f1f26', color: activeTab === 'users' ? '#10b981' : 'var(--text-muted)', padding: '1px 5px', borderRadius: '4px', fontWeight: 600 }}>
-                {users.length || 1}
-              </span>
-            </button>
-
-            <button 
-              onClick={() => setActiveTab('snapshots')} 
-              style={tabStyle(activeTab === 'snapshots')}
-            >
-              <Camera size={14} />
-              <span>Snapshots</span>
-              {snapshots.length > 0 && (
-                <span style={{ fontSize: '10px', background: '#1f1f26', color: 'var(--text-muted)', padding: '1px 5px', borderRadius: '4px', fontWeight: 600 }}>
-                  {snapshots.length}
-                </span>
-              )}
-            </button>
-          </div>
-          
-          {/* Tab Content Viewport */}
-          <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-            {activeTab === 'chat' && <ChatPanel />}
-            {activeTab === 'users' && <UsersList />}
-            {activeTab === 'snapshots' && <SnapshotPanel />}
-          </div>
-        </div>
+        {layout.sidebarOpen && (
+          <aside className="sidebar" aria-label="Room sidebar">
+            <div className="sidebar-tabs" role="tablist">
+              {tabs.map(({ id, label, icon: Icon, count, accent }) => (
+                <button
+                  key={id}
+                  role="tab"
+                  aria-selected={activeTab === id}
+                  className={`sidebar-tab ${activeTab === id ? 'active' : ''}`}
+                  onClick={() => setActiveTab(id)}
+                >
+                  <Icon size={14} />
+                  <span>{label}</span>
+                  {count > 0 && <span className={`badge ${accent ? 'accent' : ''}`}>{count}</span>}
+                </button>
+              ))}
+            </div>
+            <div className="sidebar-content">
+              {activeTab === 'chat' && <ChatPanel />}
+              {activeTab === 'users' && <UsersList />}
+              {activeTab === 'snapshots' && <SnapshotPanel />}
+            </div>
+          </aside>
+        )}
       </div>
+
+      <StatusBar
+        unreadMessages={unread}
+        onOpenChat={() => openTab('chat')}
+        onOpenPeople={() => openTab('users')}
+        onShowShortcuts={() => setShowShortcuts(true)}
+      />
+
+      {showShortcuts && <ShortcutsModal onClose={() => setShowShortcuts(false)} />}
     </div>
   );
 };
-
-const tabStyle = (isActive) => ({
-  flex: 1,
-  padding: '0.65rem 0.5rem',
-  background: isActive ? 'rgba(139, 92, 246, 0.08)' : 'transparent',
-  color: isActive ? '#f4f4f5' : 'var(--text-muted)',
-  border: 'none',
-  borderBottom: isActive ? '2px solid #8b5cf6' : '2px solid transparent',
-  cursor: 'pointer',
-  fontWeight: isActive ? 600 : 500,
-  fontSize: '0.8rem',
-  outline: 'none',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: '6px',
-  transition: 'all 0.15s ease'
-});
 
 export default RoomPage;

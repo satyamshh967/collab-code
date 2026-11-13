@@ -81,7 +81,7 @@ export default (io, socket) => {
     let room = roomManager.findById(roomId);
     if (!room) {
       // Auto-create room so direct URL sharing or join-by-code always succeeds seamlessly
-      room = roomManager.create(roomId, `Room ${roomId.slice(0, 8)}`, 'javascript');
+      room = roomManager.create(roomId, `Room ${roomId}`, 'javascript');
     }
 
     if (roomCleanupTimers.has(roomId)) {

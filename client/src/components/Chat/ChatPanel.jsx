@@ -85,7 +85,7 @@ const ChatPanel = () => {
                   width: '26px',
                   height: '26px',
                   borderRadius: '50%',
-                  background: isMe ? '#7c3aed' : '#272730',
+                  background: isMe ? '#7c3aed' : (msg.color || '#272730'),
                   color: '#ffffff',
                   display: 'flex',
                   alignItems: 'center',
@@ -164,7 +164,9 @@ const ChatPanel = () => {
         <input 
           className="input" 
           style={{ flex: 1, padding: '0.45rem 0.75rem', fontSize: '0.85rem', borderRadius: '6px' }} 
-          placeholder="Send a message..." 
+          placeholder="Message the room..."
+          maxLength={2000}
+          aria-label="Chat message" 
           value={text} 
           onChange={(e) => setText(e.target.value)} 
         />

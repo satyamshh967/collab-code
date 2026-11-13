@@ -25,7 +25,8 @@ const SnapshotPanel = () => {
         <input 
           className="input" 
           style={{ flex: 1, fontSize: '0.82rem', padding: '0.45rem 0.75rem' }} 
-          placeholder="e.g. Working checkpoint v1..." 
+          placeholder="Label, e.g. passing tests (Ctrl+S quick-saves)"
+          maxLength={80}
           value={label} 
           onChange={(e) => setLabel(e.target.value)} 
         />
@@ -81,7 +82,11 @@ const SnapshotPanel = () => {
 
               <button 
                 className="btn" 
-                onClick={() => restoreSnapshot(snap.id)} 
+                onClick={() => {
+                  if (window.confirm(`Restore "${snap.label}"? This replaces the current code for everyone in the room.`)) {
+                    restoreSnapshot(snap.id);
+                  }
+                }}
                 style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', background: 'rgba(168, 85, 247, 0.15)', color: '#d8b4fe', border: '1px solid rgba(168, 85, 247, 0.3)' }}
                 title="Restore this code snapshot"
               >

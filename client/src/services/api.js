@@ -23,11 +23,11 @@ export const api = {
     if (!res.ok) throw new Error('Failed to fetch room info');
     return res.json();
   },
-  executeCode: async (code, language, roomId = null, stdin = '') => {
+  executeCode: async ({ code, language, roomId = null, stdin = '', runBy = null }) => {
     const res = await fetch(`${BASE_URL}/execute`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code, language, roomId, stdin })
+      body: JSON.stringify({ code, language, roomId, stdin, runBy })
     });
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}));

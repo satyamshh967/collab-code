@@ -36,6 +36,12 @@ export const SOCKET_EVENTS = {
   CHAT_MESSAGE: 'chat:message',
   CHAT_HISTORY: 'chat:history',
 
+  // Presence & interview
+  REACTION: 'room:reaction',
+  INTERVIEW_UPDATE: 'interview:update',
+  INTERVIEW_END: 'interview:end',
+  INTERVIEW_EXTEND: 'interview:extend',
+
   // General
   ERROR: 'error',
   CONNECT: 'connect',

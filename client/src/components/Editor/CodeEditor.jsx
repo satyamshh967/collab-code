@@ -1,166 +1,166 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useMemo, useState } from 'react';
 import Editor from '@monaco-editor/react';
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
 import { MonacoBinding } from '../../utils/y-monaco';
 import { useRoom } from '../../hooks/useRoom';
 import { EDITOR_OPTIONS } from '../../utils/constants';
+import { getOrCreateUsername, DEFAULT_EDITOR_SETTINGS } from '../../utils/storage';
 
-const CodeEditor = () => {
-  const { roomId, language, updateCode, currentUser, registerCodeGetter } = useRoom();
+const THEME_NAME = 'codecollab-dark';
+
+// Editor theme matched to the app palette instead of stock vs-dark
+const defineTheme = (monaco) => {
+  monaco.editor.defineTheme(THEME_NAME, {
+    base: 'vs-dark',
+    inherit: true,
+    rules: [
+      { token: 'comment', foreground: '71717a', fontStyle: 'italic' },
+      { token: 'keyword', foreground: 'c084fc' },
+      { token: 'string', foreground: '7dd3fc' },
+      { token: 'number', foreground: 'fbbf24' },
+      { token: 'type', foreground: '34d399' }
+    ],
+    colors: {
+      'editor.background': '#111113',
+      'editor.lineHighlightBackground': '#1a1a20',
+      'editor.selectionBackground': '#8b5cf640',
+      'editorLineNumber.foreground': '#3f3f46',
+      'editorLineNumber.activeForeground': '#a1a1aa',
+      'editorCursor.foreground': '#a78bfa',
+      'editorIndentGuide.background1': '#1f1f26',
+      'editorWidget.background': '#1a1a20',
+      'editorWidget.border': '#2e2e38',
+      'scrollbarSlider.background': '#2b2b3480'
+    }
+  });
+};
+
+const CodeEditor = ({ settings = DEFAULT_EDITOR_SETTINGS }) => {
+  const { roomId, language, currentUser, registerCodeGetter, setSyncStatus, setEditor } = useRoom();
   const editorRef = useRef(null);
   const monacoRef = useRef(null);
-  const bindingRef = useRef(null);
   const providerRef = useRef(null);
-  const ydocRef = useRef(null);
   const [isEditorReady, setIsEditorReady] = useState(false);
+  const [hasSynced, setHasSynced] = useState(false);
 
-  const updateCodeRef = useRef(updateCode);
-  updateCodeRef.current = updateCode;
-  const registerCodeGetterRef = useRef(registerCodeGetter);
-  registerCodeGetterRef.current = registerCodeGetter;
+  // Context callbacks are stable, but keep refs so the Yjs effect below only
+  // re-runs when the room (not a callback identity) changes.
+  const callbacksRef = useRef({ registerCodeGetter, setSyncStatus });
+  callbacksRef.current = { registerCodeGetter, setSyncStatus };
+  const currentUserRef = useRef(currentUser);
+  currentUserRef.current = currentUser;
 
   const handleEditorDidMount = (editor, monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
+    setEditor(editor);
     setIsEditorReady(true);
+    editor.focus();
   };
 
-  // 1. Initialize Yjs CRDT Provider & Monaco Binding once per room session
+  useEffect(() => () => setEditor(null), [setEditor]);
+
+  // 1. One Yjs document + provider + Monaco binding per room session
   useEffect(() => {
-    if (!isEditorReady || !editorRef.current || !monacoRef.current || !roomId) return;
-
+    if (!isEditorReady || !roomId) return undefined;
     const editor = editorRef.current;
-    const model = editor.getModel();
-    if (!model) return;
+    const model = editor?.getModel();
+    if (!model) return undefined;
 
-    // Clean up any existing instances
-    if (bindingRef.current) {
-      bindingRef.current.destroy();
-      bindingRef.current = null;
-    }
-    if (providerRef.current) {
-      providerRef.current.destroy();
-      providerRef.current = null;
-    }
-    if (ydocRef.current) {
-      ydocRef.current.destroy();
-      ydocRef.current = null;
-    }
+    const { registerCodeGetter: register, setSyncStatus: reportStatus } = callbacksRef.current;
+    setHasSynced(false);
+    reportStatus('connecting');
 
     const ydoc = new Y.Doc();
-    ydocRef.current = ydoc;
-
     const serverHttpUrl = process.env.REACT_APP_SERVER_URL || 'http://localhost:3001';
-    const wsUrl = serverHttpUrl.replace(/^http/, 'ws') + '/yjs';
-
-    const provider = new WebsocketProvider(wsUrl, roomId, ydoc, {
-      connect: true
-    });
+    const wsUrl = `${serverHttpUrl.replace(/^http/, 'ws')}/yjs`;
+    const provider = new WebsocketProvider(wsUrl, roomId, ydoc, { connect: true });
     providerRef.current = provider;
-
     const yText = ydoc.getText('monaco');
 
-    // Set initial awareness state
-    const storedUsername = localStorage.getItem('codecollab_username') || 'Guest';
     provider.awareness.setLocalStateField('user', {
-      name: currentUser?.username || storedUsername,
-      color: currentUser?.color || '#38bdf8'
+      name: currentUserRef.current?.username || getOrCreateUsername(),
+      color: currentUserRef.current?.color || '#38bdf8'
     });
 
-    // Monaco Yjs Binding with isolated local cursor & remote peer awareness
-    const binding = new MonacoBinding(
-      yText,
-      model,
-      new Set([editor]),
-      provider.awareness,
-      monacoRef.current
-    );
-    bindingRef.current = binding;
+    const binding = new MonacoBinding(yText, model, new Set([editor]), provider.awareness, monacoRef.current);
 
-    // Let "Run" read the live document instead of the debounced context copy
-    registerCodeGetterRef.current?.(() => yText.toString());
+    // "Run" and "Download" read the live document on demand. Nothing is pushed
+    // into React state per keystroke, so typing never re-renders the app.
+    register(() => yText.toString());
 
-    // The server seeds new rooms with starter code, so the client never inserts
-    // it (two clients doing so concurrently would duplicate the snippet).
-    provider.on('sync', (isSynced) => {
-      if (isSynced && updateCodeRef.current) {
-        updateCodeRef.current(yText.toString());
+    const onStatus = ({ status }) => reportStatus(status);
+    const onSync = (isSynced) => {
+      if (isSynced) {
+        setHasSynced(true);
+        reportStatus('connected');
       }
-    });
-
-    // Listen to changes in Yjs CRDT doc and update RoomContext code (debounced)
-    let debounceTimer = null;
-    const observer = () => {
-      clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => {
-        if (updateCodeRef.current) {
-          updateCodeRef.current(yText.toString());
-        }
-      }, 250);
     };
-    yText.observe(observer);
+    provider.on('status', onStatus);
+    provider.on('sync', onSync);
 
     return () => {
-      registerCodeGetterRef.current?.(null);
-      clearTimeout(debounceTimer);
-      yText.unobserve(observer);
-      if (provider.awareness) {
-        provider.awareness.setLocalState(null);
-      }
-      if (bindingRef.current) {
-        bindingRef.current.destroy();
-        bindingRef.current = null;
-      }
-      if (providerRef.current) {
-        providerRef.current.destroy();
-        providerRef.current = null;
-      }
-      if (ydocRef.current) {
-        ydocRef.current.destroy();
-        ydocRef.current = null;
-      }
+      register(null);
+      provider.off('status', onStatus);
+      provider.off('sync', onSync);
+      provider.awareness.setLocalState(null);
+      binding.destroy();
+      provider.destroy();
+      ydoc.destroy();
+      providerRef.current = null;
+      reportStatus('disconnected');
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEditorReady, roomId]);
 
-  // 2. Update user awareness in place without destroying/recreating Y.Doc
+  // 2. Keep our presence (name/color) current without recreating the doc
   useEffect(() => {
     if (!providerRef.current || !currentUser) return;
-
     providerRef.current.awareness.setLocalStateField('user', {
       name: currentUser.username,
       color: currentUser.color || '#38bdf8'
     });
   }, [currentUser]);
 
-  // 3. Update syntax highlighting when language switches without touching doc text
+  // 3. Syntax highlighting follows the room language
   useEffect(() => {
-    if (monacoRef.current && editorRef.current) {
-      const model = editorRef.current.getModel();
-      if (model) {
-        const monacoLang = language === 'cpp' ? 'cpp' : language;
-        monacoRef.current.editor.setModelLanguage(model, monacoLang);
-      }
+    const model = editorRef.current?.getModel();
+    if (monacoRef.current && model) {
+      monacoRef.current.editor.setModelLanguage(model, language);
     }
-  }, [language]);
+  }, [language, isEditorReady]);
+
+  const options = useMemo(() => ({
+    ...EDITOR_OPTIONS,
+    fontSize: settings.fontSize,
+    minimap: { enabled: settings.minimap },
+    wordWrap: settings.wordWrap ? 'on' : 'off'
+  }), [settings.fontSize, settings.minimap, settings.wordWrap]);
 
   return (
-    <div style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }}>
+    <div style={{ width: '100%', height: '100%', position: 'absolute', inset: 0 }}>
       <Editor
         height="100%"
-        language={language === 'cpp' ? 'cpp' : language}
-        theme="vs-dark"
+        defaultLanguage={language}
+        theme={THEME_NAME}
+        beforeMount={defineTheme}
         defaultValue=""
         onMount={handleEditorDidMount}
-        options={EDITOR_OPTIONS}
+        options={options}
         loading={
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-secondary)' }}>
-            <div className="spinner" style={{ marginRight: '0.5rem' }} />
-            Initializing CRDT Editor...
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '0.5rem', color: 'var(--text-secondary)' }}>
+            <span className="spinner" /> Loading editor...
           </div>
         }
       />
+      {isEditorReady && !hasSynced && (
+        <div style={{
+          position: 'absolute', top: 12, right: 24, zIndex: 5,
+          display: 'inline-flex', alignItems: 'center', gap: 8
+        }}>
+          <span className="pill warn"><span className="spinner" style={{ width: 9, height: 9, borderTopColor: '#fbbf24' }} />Loading shared document...</span>
+        </div>
+      )}
     </div>
   );
 };

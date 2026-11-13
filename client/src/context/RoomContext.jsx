@@ -1,10 +1,22 @@
-import React, { createContext, useState, useCallback, useEffect, useRef } from 'react';
+import React, { createContext, useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useSocket } from '../hooks/useSocket';
 import { SOCKET_EVENTS } from '../utils/constants';
 import { api } from '../services/api';
+import { fireEmojiBurst } from '../utils/confetti';
 import toast from 'react-hot-toast';
 
 export const RoomContext = createContext();
+
+const IDLE_EXECUTION = {
+  jobId: null,
+  status: 'idle', // 'idle' | 'queued' | 'running' | 'completed' | 'failed'
+  output: '',
+  error: '',
+  exitCode: null,
+  executionTime: 0,
+  runBy: null,      // display name of whoever started the run
+  isOwnRun: false   // true when this browser started the run
+};
 
 export const RoomProvider = ({ children }) => {
   const { socket } = useSocket();
@@ -12,28 +24,26 @@ export const RoomProvider = ({ children }) => {
   const [roomInfo, setRoomInfo] = useState(null);
   const [users, setUsers] = useState([]);
   const [language, setLanguage] = useState('javascript');
-  const [code, setCode] = useState('');
   const [chatMessages, setChatMessages] = useState([]);
   const [snapshots, setSnapshots] = useState([]);
   const [isInterviewRoom, setIsInterviewRoom] = useState(false);
+  const [interview, setInterview] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
-
-  // Asynchronous execution streaming state
-  const [executionState, setExecutionState] = useState({
-    jobId: null,
-    status: 'idle', // 'idle' | 'queued' | 'running' | 'completed' | 'failed'
-    output: '',
-    error: '',
-    exitCode: null,
-    executionTime: 0
-  });
+  const [syncStatus, setSyncStatus] = useState('connecting'); // Yjs: 'connecting' | 'connected' | 'disconnected'
+  const [editor, setEditor] = useState(null); // Monaco instance, for status bar / toolbar actions
+  const [executionState, setExecutionState] = useState(IDLE_EXECUTION);
 
   const roomIdRef = useRef(null);
   roomIdRef.current = roomId;
+  const currentUserRef = useRef(null);
+  currentUserRef.current = currentUser;
   // Active fallback poller for the current execution job (cancelled on new run/result/unmount)
   const pollRef = useRef({ timer: null, jobId: null });
-  // Returns the live editor text; set by CodeEditor so runs never use debounced state
+  // Returns the live editor text; set by CodeEditor so runs never read stale state
   const codeGetterRef = useRef(null);
+  // Jobs started from this browser, and who started jobs we've heard about
+  const ownJobsRef = useRef(new Set());
+  const jobOwnersRef = useRef(new Map());
 
   const stopPolling = useCallback(() => {
     if (pollRef.current.timer) clearInterval(pollRef.current.timer);
@@ -45,74 +55,75 @@ export const RoomProvider = ({ children }) => {
   useEffect(() => {
     if (!socket) return;
 
-    // Room info received after joining
+    const syncCurrentUser = (list) => {
+      const me = list.find((u) => u.socketId === socket.id);
+      if (me) setCurrentUser(me);
+    };
+
     const handleRoomInfo = (data) => {
       setRoomInfo(data);
       setUsers(data.users || []);
       setLanguage(data.language || 'javascript');
-      if (data.code !== undefined) {
-        setCode(data.code);
-      }
-      setIsInterviewRoom(data.isInterviewRoom || false);
+      setIsInterviewRoom(Boolean(data.isInterviewRoom));
+      setInterview(data.interview || null);
       setChatMessages(Array.isArray(data.chatMessages) ? data.chatMessages : []);
       setSnapshots(Array.isArray(data.snapshots) ? data.snapshots : []);
-
-      const foundUser = (data.users || []).find(u => u.socketId === socket.id);
-      if (foundUser) {
-        setCurrentUser(foundUser);
-      }
-      toast.success(`Connected to room: ${data.name}`);
+      syncCurrentUser(data.users || []);
     };
 
-    // Users list update
-    const handleUsers = (usersList) => {
-      setUsers(usersList);
-      const foundUser = usersList.find(u => u.socketId === socket.id);
-      if (foundUser) {
-        setCurrentUser(foundUser);
-      }
+    const handleUsers = (list) => {
+      setUsers(list);
+      syncCurrentUser(list);
     };
 
-    // User joined/left toasts
     const handleUserJoined = (user) => {
-      toast.success(`${user.username} joined the room`);
+      toast(`${user.username} joined`, { icon: '👋', id: `join-${user.id}` });
     };
 
     // Language changed by a peer (the server doesn't echo our own change back)
     const handleLanguageChange = (newLanguage) => {
       setLanguage(newLanguage);
-      toast(`Language switched to ${newLanguage}`, { icon: '🔄' });
+      toast(`Language switched to ${newLanguage}`, { icon: '🔄', id: 'language-change' });
     };
 
-    // Chat message received
     const handleChatMessage = (msg) => {
-      setChatMessages((prev) => [...prev, msg]);
+      setChatMessages((prev) => [...prev.slice(-199), msg]);
     };
 
-    // Snapshot saved
     const handleSnapshotSaved = (snapshot) => {
       setSnapshots((prev) => [...prev, snapshot]);
       toast.success(`Snapshot "${snapshot.label}" saved`);
     };
 
     const handleSnapshotRestored = ({ label, restoredBy }) => {
-      toast(`${restoredBy} restored snapshot "${label}"`, { icon: '⏪' });
+      toast(`${restoredBy} restored "${label}"`, { icon: '⏪' });
     };
 
-    // Real-time execution events
-    const handleExecutionStatus = ({ jobId, status }) => {
-      setExecutionState((prev) => ({
-        ...prev,
-        jobId,
-        status,
-        output: status === 'running' ? (prev.output ? prev.output + '\n[Execution started...]\n' : '[Execution started...]\n') : prev.output
-      }));
+    const handleReaction = ({ emoji, userId }) => {
+      // Our own burst was already shown optimistically when we clicked
+      if (userId && userId === currentUserRef.current?.id) return;
+      fireEmojiBurst(emoji);
+    };
+
+    const handleInterviewUpdate = (data) => setInterview(data);
+
+    // Real-time execution events (from our runs and our collaborators')
+    const handleExecutionStatus = ({ jobId, status, runBy }) => {
+      if (runBy) jobOwnersRef.current.set(jobId, runBy);
+      setExecutionState((prev) => {
+        // A peer's run starting replaces whatever is in the panel
+        const isNewJob = prev.jobId !== jobId;
+        const isOwnRun = ownJobsRef.current.has(jobId);
+        if (isNewJob && !isOwnRun && status === 'queued') {
+          return { ...IDLE_EXECUTION, jobId, status, runBy: runBy || null };
+        }
+        return { ...prev, jobId, status, runBy: prev.runBy || runBy || null, isOwnRun };
+      });
     };
 
     const handleExecutionOutput = ({ jobId, chunk, type }) => {
-      setExecutionState((prev) => ({
+      setExecutionState((prev) => (prev.jobId !== jobId ? prev : {
         ...prev,
-        jobId,
         output: type === 'stderr' ? prev.output : prev.output + chunk,
         error: type === 'stderr' ? prev.error + chunk : prev.error
       }));
@@ -120,52 +131,42 @@ export const RoomProvider = ({ children }) => {
 
     const handleExecutionResult = ({ jobId, status, output, error, exitCode, executionTime }) => {
       if (pollRef.current.jobId === jobId) stopPolling();
+      const isOwnRun = ownJobsRef.current.has(jobId);
       setExecutionState({
         jobId,
         status,
         output: output || '',
         error: error || '',
         exitCode: exitCode ?? 0,
-        executionTime: executionTime || 0
+        executionTime: executionTime || 0,
+        runBy: jobOwnersRef.current.get(jobId) || null,
+        isOwnRun
       });
-
-      if (status === 'completed' && exitCode === 0) {
-        toast.success(`Execution completed in ${executionTime || 0}ms`);
-      } else {
-        toast.error(`Execution finished with errors (${exitCode ?? 1})`);
-      }
     };
 
     const handleError = (data) => {
-      toast.error(data.message || 'An error occurred');
+      toast.error(data?.message || 'An error occurred');
     };
 
-    socket.on(SOCKET_EVENTS.ROOM_INFO, handleRoomInfo);
-    socket.on(SOCKET_EVENTS.ROOM_USERS, handleUsers);
-    socket.on(SOCKET_EVENTS.USER_JOINED, handleUserJoined);
-    socket.on(SOCKET_EVENTS.LANGUAGE_CHANGE, handleLanguageChange);
-    socket.on(SOCKET_EVENTS.CHAT_MESSAGE, handleChatMessage);
-    socket.on(SOCKET_EVENTS.SNAPSHOT_SAVED, handleSnapshotSaved);
-    socket.on(SOCKET_EVENTS.SNAPSHOT_RESTORED, handleSnapshotRestored);
-    socket.on(SOCKET_EVENTS.ERROR, handleError);
+    const handlers = {
+      [SOCKET_EVENTS.ROOM_INFO]: handleRoomInfo,
+      [SOCKET_EVENTS.ROOM_USERS]: handleUsers,
+      [SOCKET_EVENTS.USER_JOINED]: handleUserJoined,
+      [SOCKET_EVENTS.LANGUAGE_CHANGE]: handleLanguageChange,
+      [SOCKET_EVENTS.CHAT_MESSAGE]: handleChatMessage,
+      [SOCKET_EVENTS.SNAPSHOT_SAVED]: handleSnapshotSaved,
+      [SOCKET_EVENTS.SNAPSHOT_RESTORED]: handleSnapshotRestored,
+      [SOCKET_EVENTS.REACTION]: handleReaction,
+      [SOCKET_EVENTS.INTERVIEW_UPDATE]: handleInterviewUpdate,
+      [SOCKET_EVENTS.ERROR]: handleError,
+      'execution:status': handleExecutionStatus,
+      'execution:output': handleExecutionOutput,
+      'execution:result': handleExecutionResult
+    };
 
-    socket.on('execution:status', handleExecutionStatus);
-    socket.on('execution:output', handleExecutionOutput);
-    socket.on('execution:result', handleExecutionResult);
-
+    Object.entries(handlers).forEach(([event, handler]) => socket.on(event, handler));
     return () => {
-      socket.off(SOCKET_EVENTS.ROOM_INFO, handleRoomInfo);
-      socket.off(SOCKET_EVENTS.ROOM_USERS, handleUsers);
-      socket.off(SOCKET_EVENTS.USER_JOINED, handleUserJoined);
-      socket.off(SOCKET_EVENTS.LANGUAGE_CHANGE, handleLanguageChange);
-      socket.off(SOCKET_EVENTS.CHAT_MESSAGE, handleChatMessage);
-      socket.off(SOCKET_EVENTS.SNAPSHOT_SAVED, handleSnapshotSaved);
-      socket.off(SOCKET_EVENTS.SNAPSHOT_RESTORED, handleSnapshotRestored);
-      socket.off(SOCKET_EVENTS.ERROR, handleError);
-
-      socket.off('execution:status', handleExecutionStatus);
-      socket.off('execution:output', handleExecutionOutput);
-      socket.off('execution:result', handleExecutionResult);
+      Object.entries(handlers).forEach(([event, handler]) => socket.off(event, handler));
     };
   }, [socket, stopPolling]);
 
@@ -190,65 +191,60 @@ export const RoomProvider = ({ children }) => {
     setRoomId(null);
     setRoomInfo(null);
     setUsers([]);
-    setCode('');
     setChatMessages([]);
     setSnapshots([]);
     setCurrentUser(null);
+    setInterview(null);
+    setIsInterviewRoom(false);
+    setExecutionState(IDLE_EXECUTION);
   }, [socket, stopPolling]);
 
-  const updateCode = useCallback((newCode) => {
-    setCode(newCode);
-  }, []);
-
-  const sendMessage = useCallback((text) => {
-    if (socket && roomId) {
-      socket.emit(SOCKET_EVENTS.CHAT_MESSAGE, { roomId, text });
+  const emitToRoom = useCallback((event, payload = {}) => {
+    if (socket && roomIdRef.current) {
+      socket.emit(event, { roomId: roomIdRef.current, ...payload });
     }
-  }, [socket, roomId]);
+  }, [socket]);
+
+  const sendMessage = useCallback((text) => emitToRoom(SOCKET_EVENTS.CHAT_MESSAGE, { text }), [emitToRoom]);
+
+  const sendReaction = useCallback((emoji) => {
+    fireEmojiBurst(emoji); // optimistic local burst
+    emitToRoom(SOCKET_EVENTS.REACTION, { emoji });
+  }, [emitToRoom]);
 
   const changeLanguage = useCallback((lang) => {
     setLanguage(lang);
-    if (socket && roomId) {
-      socket.emit(SOCKET_EVENTS.LANGUAGE_CHANGE, { roomId, language: lang });
-    }
-  }, [socket, roomId]);
+    emitToRoom(SOCKET_EVENTS.LANGUAGE_CHANGE, { language: lang });
+  }, [emitToRoom]);
 
-  const saveSnapshot = useCallback((label) => {
-    if (socket && roomId) {
-      socket.emit(SOCKET_EVENTS.SAVE_SNAPSHOT, { roomId, label });
-    }
-  }, [socket, roomId]);
-
-  const restoreSnapshot = useCallback((snapshotId) => {
-    if (socket && roomId) {
-      socket.emit(SOCKET_EVENTS.RESTORE_SNAPSHOT, { roomId, snapshotId });
-    }
-  }, [socket, roomId]);
+  const saveSnapshot = useCallback((label) => emitToRoom(SOCKET_EVENTS.SAVE_SNAPSHOT, { label }), [emitToRoom]);
+  const restoreSnapshot = useCallback((snapshotId) => emitToRoom(SOCKET_EVENTS.RESTORE_SNAPSHOT, { snapshotId }), [emitToRoom]);
+  const endInterview = useCallback(() => emitToRoom(SOCKET_EVENTS.INTERVIEW_END), [emitToRoom]);
+  const extendInterview = useCallback(() => emitToRoom(SOCKET_EVENTS.INTERVIEW_EXTEND), [emitToRoom]);
 
   const registerCodeGetter = useCallback((getter) => {
     codeGetterRef.current = getter;
   }, []);
 
-  const runCode = useCallback(async (currentCode, currentLang, stdin = '') => {
+  const getCurrentCode = useCallback(() => (codeGetterRef.current ? codeGetterRef.current() : ''), []);
+
+  const runCode = useCallback(async (currentLang, stdin = '') => {
     stopPolling();
-    const liveCode = codeGetterRef.current ? codeGetterRef.current() : currentCode;
-    setExecutionState({
-      jobId: null,
-      status: 'queued',
-      output: 'Queueing execution job in BullMQ...\n',
-      error: '',
-      exitCode: null,
-      executionTime: 0
-    });
+    const code = getCurrentCode();
+    const runBy = currentUserRef.current?.username || null;
+    if (!code.trim()) {
+      toast.error('Nothing to run yet: the editor is empty');
+      return;
+    }
+
+    setExecutionState({ ...IDLE_EXECUTION, status: 'queued', runBy, isOwnRun: true });
 
     try {
-      const res = await api.executeCode(liveCode, currentLang, roomId, stdin);
-      setExecutionState((prev) => ({
-        ...prev,
-        jobId: res.jobId,
-        status: 'queued',
-        output: `Job enqueued (Job ID: ${res.jobId})\nWaiting for worker...\n`
-      }));
+      const res = await api.executeCode({ code, language: currentLang, roomId: roomIdRef.current, stdin, runBy });
+      ownJobsRef.current.add(res.jobId);
+      setExecutionState((prev) => (prev.jobId && prev.jobId !== res.jobId && prev.status !== 'queued'
+        ? prev // a socket result for this job already landed
+        : { ...prev, jobId: res.jobId, status: prev.jobId === res.jobId ? prev.status : 'queued', isOwnRun: true }));
 
       // Polling fallback in case the WebSocket result is delayed or Redis is offline
       let attempts = 0;
@@ -271,48 +267,54 @@ export const RoomProvider = ({ children }) => {
               output: statusRes.output || '',
               error: statusRes.error || '',
               exitCode: statusRes.exitCode ?? 0,
-              executionTime: statusRes.executionTime || 0
+              executionTime: statusRes.executionTime || 0,
+              runBy,
+              isOwnRun: true
             });
+          } else if (statusRes?.status === 'running') {
+            setExecutionState((prev) => (prev.jobId === res.jobId && prev.status === 'queued'
+              ? { ...prev, status: 'running' } : prev));
           }
         } catch (e) {
           // Transient network error: keep polling until attempts run out
         }
-      }, 1000);
+      }, 700);
       pollRef.current = { timer: pollTimer, jobId: res.jobId };
     } catch (err) {
       setExecutionState({
-        jobId: null,
+        ...IDLE_EXECUTION,
         status: 'failed',
-        output: '',
         error: err.message || 'Failed to submit execution request',
         exitCode: -1,
-        executionTime: 0
+        runBy,
+        isOwnRun: true
       });
       toast.error(err.message || 'Failed to submit execution request');
     }
-  }, [roomId, stopPolling]);
+  }, [stopPolling, getCurrentCode]);
 
   const clearExecutionOutput = useCallback(() => {
     stopPolling();
-    setExecutionState({
-      jobId: null,
-      status: 'idle',
-      output: '',
-      error: '',
-      exitCode: null,
-      executionTime: 0
-    });
+    setExecutionState(IDLE_EXECUTION);
   }, [stopPolling]);
 
-  return (
-    <RoomContext.Provider value={{
-      roomId, roomInfo, users, language, code, chatMessages, snapshots,
-      isInterviewRoom, currentUser,
-      executionState, runCode, clearExecutionOutput, registerCodeGetter,
-      joinRoom, leaveRoom, updateCode,
-      sendMessage, changeLanguage, saveSnapshot, restoreSnapshot
-    }}>
-      {children}
-    </RoomContext.Provider>
-  );
+  // Memoized so consumers only re-render when something they read changes
+  const value = useMemo(() => ({
+    roomId, roomInfo, users, language, chatMessages, snapshots,
+    isInterviewRoom, interview, currentUser, syncStatus, editor,
+    executionState,
+    joinRoom, leaveRoom, sendMessage, sendReaction, changeLanguage,
+    saveSnapshot, restoreSnapshot, endInterview, extendInterview,
+    runCode, clearExecutionOutput, registerCodeGetter, getCurrentCode,
+    setSyncStatus, setEditor
+  }), [
+    roomId, roomInfo, users, language, chatMessages, snapshots,
+    isInterviewRoom, interview, currentUser, syncStatus, editor,
+    executionState,
+    joinRoom, leaveRoom, sendMessage, sendReaction, changeLanguage,
+    saveSnapshot, restoreSnapshot, endInterview, extendInterview,
+    runCode, clearExecutionOutput, registerCodeGetter, getCurrentCode
+  ]);
+
+  return <RoomContext.Provider value={value}>{children}</RoomContext.Provider>;
 };

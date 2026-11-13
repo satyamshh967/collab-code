@@ -1,6 +1,6 @@
 import React from 'react';
 import { useRoom } from '../../hooks/useRoom';
-import { LANGUAGES } from '../../utils/constants';
+import { LANGUAGES, RUNNABLE_LANGUAGES } from '../../utils/constants';
 import { Code2 } from 'lucide-react';
 
 const LanguageSelector = () => {
@@ -14,6 +14,8 @@ const LanguageSelector = () => {
           className="input" 
           value={language} 
           onChange={(e) => changeLanguage(e.target.value)}
+          aria-label="Room language (changes it for everyone)"
+          title="Room language (changes it for everyone)"
           style={{ 
             padding: '0.35rem 1.8rem 0.35rem 2rem', 
             fontSize: '0.82rem',
@@ -26,7 +28,7 @@ const LanguageSelector = () => {
         >
           {LANGUAGES.map((lang) => (
             <option key={lang.id} value={lang.id} style={{ background: '#0f172a', color: '#f1f5f9' }}>
-              {lang.name}
+              {RUNNABLE_LANGUAGES.has(lang.id) ? lang.name : `${lang.name} (edit only)`}
             </option>
           ))}
         </select>
