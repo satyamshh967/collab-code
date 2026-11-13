@@ -36,14 +36,25 @@ configureSocketAdapter(io);
 app.use(helmet());
 app.use(cors({ origin: '*' }));
 app.use(express.json({ limit: '1mb' }));
-app.use(morgan('dev'));
+if (config.nodeEnv !== 'test') app.use(morgan('dev'));
 
-// Rate limiting
-const limiter = rateLimit({
+// Rate limiting. Job-status polling is cheap and frequent (clients poll ~1/s
+// while a run is in flight), so it gets its own generous budget instead of
+// draining the general one after a handful of runs.
+const isStatusPoll = (req) => req.method === 'GET' && req.path.startsWith('/execute/status/');
+app.use('/api', rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 200
-});
-app.use('/api', limiter);
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: isStatusPoll
+}));
+app.use('/api/execute/status', rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false
+}));
 
 // Pass io to routes so execution events can be broadcast
 app.use((req, res, next) => {

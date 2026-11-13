@@ -1,5 +1,6 @@
 import { roomManager } from '../models/Room.js';
-import { generateId } from '../utils/helpers.js';
+import { generateId, sanitizeInput } from '../utils/helpers.js';
+import { DEFAULT_SNIPPETS } from '../utils/defaultSnippets.js';
 
 export const getRooms = (req, res) => {
   try {
@@ -19,10 +20,13 @@ export const getRooms = (req, res) => {
 
 export const createRoom = (req, res) => {
   try {
-    const { name, language, isInterview, isInterviewRoom, interviewConfig } = req.body;
-    const isInterviewMode = isInterviewRoom ?? isInterview ?? false;
+    const { name, language, isInterview, isInterviewRoom } = req.body;
+    const isInterviewMode = Boolean(isInterviewRoom ?? isInterview ?? false);
+    const safeName = sanitizeInput(name).slice(0, 64) || 'Untitled Room';
+    const safeLanguage = Object.hasOwn(DEFAULT_SNIPPETS, language) ? language : 'javascript';
     const roomId = generateId();
-    const room = roomManager.create(roomId, name, language, isInterviewMode, interviewConfig);
+    // interviewConfig is not accepted from clients: it is server-controlled state
+    const room = roomManager.create(roomId, safeName, safeLanguage, isInterviewMode);
     
     res.status(201).json({
       id: room.id,

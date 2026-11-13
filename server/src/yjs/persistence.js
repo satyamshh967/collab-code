@@ -1,6 +1,7 @@
 import * as Y from 'yjs';
 import { getRedisClient } from '../config/redis.js';
 import { roomManager } from '../models/Room.js';
+import { getDefaultSnippet } from '../utils/defaultSnippets.js';
 
 // In-memory document storage cache
 const docs = new Map();
@@ -35,10 +36,10 @@ export const getYDoc = async (docName, defaultCode = '') => {
     }
   }
 
-  // If not in Redis, check roomManager or defaultCode
+  // If not in Redis, seed from the room's last known code, else a starter snippet
   if (!stateLoaded) {
     const room = roomManager.findById(docName);
-    const initialText = (room && room.code) ? room.code : defaultCode;
+    const initialText = (room && room.code) ? room.code : (defaultCode || getDefaultSnippet(room?.language));
     if (initialText) {
       const yText = doc.getText('monaco');
       if (yText.length === 0) {

@@ -17,11 +17,16 @@ class SnapshotManager {
     this.snapshots = new Map(); // roomId -> array of snapshots
   }
 
-  addSnapshot(snapshot) {
+  addSnapshot(snapshot, maxPerRoom = Infinity) {
     if (!this.snapshots.has(snapshot.roomId)) {
       this.snapshots.set(snapshot.roomId, []);
     }
-    this.snapshots.get(snapshot.roomId).push(snapshot);
+    const list = this.snapshots.get(snapshot.roomId);
+    list.push(snapshot);
+    // Drop the oldest snapshots beyond the cap to bound memory per room
+    if (list.length > maxPerRoom) {
+      list.splice(0, list.length - maxPerRoom);
+    }
     return snapshot;
   }
 

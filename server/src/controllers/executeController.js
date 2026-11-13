@@ -1,37 +1,52 @@
 import { enqueueExecution, getJobStatus } from '../queue/executionQueue.js';
 
-const SUPPORTED_LANGUAGES = ['javascript', 'js', 'python', 'py', 'java', 'cpp', 'c', 'go', 'rust'];
+// Only languages the execution service can actually run. Keep in sync with
+// execution-service/src/sandbox/securityPolicy.js
+const LANGUAGE_ALIASES = { javascript: 'javascript', js: 'javascript', python: 'python', py: 'python', java: 'java' };
+const MAX_CODE_LENGTH = 50000;
+const MAX_STDIN_LENGTH = 64 * 1024;
 
 /**
  * Enqueue code execution job asynchronously
  */
 export const executeCode = async (req, res) => {
   try {
-    const { code, language, stdin = '', roomId = null, userId = null } = req.body;
+    const { code, language, stdin = '', roomId = null, userId = null } = req.body || {};
 
-    if (!code || !language) {
+    if (typeof code !== 'string' || !code.trim() || typeof language !== 'string' || !language) {
       return res.status(400).json({ error: 'Code and language are required fields' });
     }
 
-    if (!SUPPORTED_LANGUAGES.includes(language.toLowerCase())) {
-      return res.status(400).json({ error: `Language '${language}' is not supported` });
+    const normalizedLanguage = LANGUAGE_ALIASES[language.trim().toLowerCase()];
+    if (!normalizedLanguage) {
+      return res.status(400).json({ error: `Running '${language}' code is not supported yet` });
     }
+
+    if (code.length > MAX_CODE_LENGTH) {
+      return res.status(413).json({ error: `Code exceeds the ${MAX_CODE_LENGTH} character limit` });
+    }
+
+    if (typeof stdin !== 'string' || stdin.length > MAX_STDIN_LENGTH) {
+      return res.status(400).json({ error: 'stdin must be a string of at most 64 KB' });
+    }
+
+    const safeRoomId = typeof roomId === 'string' && roomId ? roomId : null;
 
     const job = await enqueueExecution({
       code,
-      language: language.toLowerCase(),
+      language: normalizedLanguage,
       stdin,
-      roomId,
-      userId
+      roomId: safeRoomId,
+      userId: typeof userId === 'string' ? userId : null
     });
 
     // Notify room that execution has been triggered
-    if (req.io && roomId) {
-      req.io.to(roomId).emit('execution:status', {
+    if (req.io && safeRoomId) {
+      req.io.to(safeRoomId).emit('execution:status', {
         jobId: job.jobId,
         status: 'queued',
-        language,
-        roomId
+        language: normalizedLanguage,
+        roomId: safeRoomId
       });
     }
 

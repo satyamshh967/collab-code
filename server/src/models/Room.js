@@ -8,7 +8,6 @@ class Room {
     this.code = '';
     this.users = new Map(); // socketId -> user
     this.chatMessages = [];
-    this.codeSnapshots = [];
     this.createdAt = formatTimestamp();
     this.createdBy = null;
     this.isInterviewRoom = isInterviewRoom;
@@ -23,7 +22,7 @@ class Room {
   addUser(user) {
     this.users.set(user.socketId, user);
     if (this.users.size === 1) {
-      this.createdBy = user.id;
+      if (!this.createdBy) this.createdBy = user.id;
       user.isOwner = true;
     }
   }
@@ -31,6 +30,11 @@ class Room {
   removeUser(socketId) {
     const user = this.users.get(socketId);
     this.users.delete(socketId);
+    // Hand ownership to the longest-present remaining user
+    if (user?.isOwner && this.users.size > 0) {
+      const [nextOwner] = this.users.values();
+      nextOwner.isOwner = true;
+    }
     return user;
   }
 
@@ -43,10 +47,6 @@ class Room {
     if (this.chatMessages.length > 100) {
       this.chatMessages.shift();
     }
-  }
-
-  addSnapshot(snapshot) {
-    this.codeSnapshots.push(snapshot);
   }
 
   setInterviewMode(config) {

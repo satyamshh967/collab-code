@@ -3,13 +3,58 @@ import { createRedisConnection, checkRedisHealth } from '../config/redis.js';
 import { v4 as uuidv4 } from 'uuid';
 import axios from 'axios';
 import { config } from '../config/index.js';
-import { runLocalSandbox } from '../../../execution-service/src/sandbox/localRunner.js';
 
 const QUEUE_NAME = 'code-execution';
+const LOCAL_JOB_TTL_MS = 10 * 60 * 1000; // forget finished standalone jobs after 10 minutes
+const EXECUTION_HTTP_TIMEOUT_MS = 15000;
 
 let executionQueue = null;
 let queueEvents = null;
 const localJobStore = new Map();
+
+const BULL_STATE_MAP = {
+  waiting: 'queued',
+  'waiting-children': 'queued',
+  delayed: 'queued',
+  prioritized: 'queued',
+  active: 'running'
+};
+
+/**
+ * Last-resort in-process sandbox used only when the execution microservice is
+ * unreachable. Loaded lazily so the server still boots in deployments (e.g. its
+ * own Docker image) where the execution-service sources are not present.
+ */
+const runInProcessFallback = async (language, code, stdin) => {
+  let sandbox;
+  try {
+    const [{ runLocalSandbox }, { validateCode }] = await Promise.all([
+      import('../../../execution-service/src/sandbox/localRunner.js'),
+      import('../../../execution-service/src/sandbox/securityPolicy.js')
+    ]);
+    sandbox = { runLocalSandbox, validateCode };
+  } catch (err) {
+    return {
+      output: '',
+      error: 'Execution service is unavailable. Please try again shortly.',
+      exitCode: -1,
+      executionTime: 0
+    };
+  }
+
+  // Apply the same policy the execution service enforces — never skip it
+  const check = sandbox.validateCode(code, language);
+  if (!check.valid) {
+    return { output: '', error: `Security validation failed: ${check.reason}`, exitCode: -1, executionTime: 0 };
+  }
+  return sandbox.runLocalSandbox(language, code, stdin);
+};
+
+const finishLocalJob = (jobId, record) => {
+  localJobStore.set(jobId, record);
+  const timer = setTimeout(() => localJobStore.delete(jobId), LOCAL_JOB_TTL_MS);
+  timer.unref?.();
+};
 
 /**
  * Initialize BullMQ execution queue only if Redis is healthy
@@ -85,22 +130,33 @@ export const enqueueExecution = async ({ code, language, stdin = '', roomId = nu
           code,
           language,
           stdin
-        }, { timeout: 6000 });
+        }, { timeout: EXECUTION_HTTP_TIMEOUT_MS });
         result = res.data;
       } catch (httpErr) {
-        // Fallback to internal sandbox runner if microservice is offline
-        result = await runLocalSandbox(language, code, stdin);
+        if (httpErr.response) {
+          // The service answered (e.g. 400 security violation): honour its verdict.
+          // Falling back to a local run here would bypass the security policy.
+          result = {
+            output: '',
+            error: httpErr.response.data?.error || `Execution service error (${httpErr.response.status})`,
+            exitCode: -1,
+            executionTime: 0
+          };
+        } else {
+          // Service unreachable: run in-process with the same policy applied
+          result = await runInProcessFallback(language, code, stdin);
+        }
       }
 
-      localJobStore.set(jobId, {
-        status: (result.exitCode === 0 || !result.error) ? 'completed' : 'failed',
+      finishLocalJob(jobId, {
+        status: result.exitCode === 0 ? 'completed' : 'failed',
         output: result.output || '',
         error: result.error || '',
         exitCode: result.exitCode ?? 0,
         executionTime: result.executionTime || 0
       });
     } catch (err) {
-      localJobStore.set(jobId, {
+      finishLocalJob(jobId, {
         status: 'failed',
         output: '',
         error: err.message || 'Execution failed',
@@ -132,14 +188,16 @@ export const getJobStatus = async (jobId) => {
           const progress = job.progress || {};
           return {
             jobId: job.id,
-            status: state,
+            status: BULL_STATE_MAP[state] || state,
             output: job.returnvalue?.output || progress.output || '',
             error: job.returnvalue?.error || progress.error || job.failedReason || '',
             exitCode: job.returnvalue?.exitCode ?? (state === 'failed' ? -1 : 0),
             executionTime: job.returnvalue?.executionTime || 0
           };
         }
-      } catch (e) {}
+      } catch (e) {
+        // Fall through to the standalone store
+      }
     }
   }
 
