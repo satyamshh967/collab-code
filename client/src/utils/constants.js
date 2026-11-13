@@ -8,6 +8,9 @@ export const LANGUAGES = [
   { id: 'rust', name: 'Rust', icon: 'SiRust', defaultCode: 'fn main() {\n  println!("Hello World!");\n}' },
 ];
 
+// Languages the execution service can run. Others are editable but not runnable.
+export const RUNNABLE_LANGUAGES = new Set(['javascript', 'python', 'java']);
+
 // Must match the server's socket event names exactly
 export const SOCKET_EVENTS = {
   // Room events
@@ -26,6 +29,7 @@ export const SOCKET_EVENTS = {
   GET_SNAPSHOTS: 'editor:get-snapshots',
   RESTORE_SNAPSHOT: 'editor:restore-snapshot',
   SNAPSHOT_SAVED: 'editor:snapshot-saved',
+  SNAPSHOT_RESTORED: 'editor:snapshot-restored',
   SYNC_REQUEST: 'editor:sync-request',
 
   // Chat events

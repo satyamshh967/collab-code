@@ -24,8 +24,8 @@ const UsersList = () => {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
         {displayUsers.map((user, i) => {
-          const isHost = i === 0;
-          const isMe = user.username === currentUser?.username;
+          const isHost = users.length > 0 ? Boolean(user.isOwner) : true;
+          const isMe = users.length > 0 ? Boolean(currentUser && user.id === currentUser.id) : true;
           const color = user.color || COLORS[i % COLORS.length] || '#8b5cf6';
           const initial = (user.username || 'U').charAt(0).toUpperCase();
 

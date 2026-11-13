@@ -49,11 +49,11 @@ const ChatPanel = () => {
         ) : (
           chatMessages.map((msg, i) => {
             const isSystem = msg.type === 'system';
-            const isMe = msg.username === currentUser?.username;
+            const isMe = currentUser ? (msg.userId ? msg.userId === currentUser.id : msg.username === currentUser.username) : false;
 
             if (isSystem) {
               return (
-                <div key={i} style={{ textAlign: 'center', margin: '0.25rem 0' }}>
+                <div key={msg.id || i} style={{ textAlign: 'center', margin: '0.25rem 0' }}>
                   <span style={{
                     fontSize: '0.72rem',
                     background: 'rgba(15, 23, 42, 0.6)',
@@ -72,7 +72,7 @@ const ChatPanel = () => {
 
             return (
               <div 
-                key={i} 
+                key={msg.id || i} 
                 style={{
                   display: 'flex',
                   gap: '8px',

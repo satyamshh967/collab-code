@@ -1,4 +1,5 @@
 import * as Y from 'yjs';
+import { sanitizeCssColor, escapeCssString } from './cursorStyles';
 
 const createMutex = () => {
   let token = true;
@@ -144,9 +145,11 @@ export class MonacoBinding {
           const headAbs = Y.createAbsolutePositionFromRelativePosition(state.selection.head, this.doc);
 
           if (anchorAbs !== null && headAbs !== null && anchorAbs.type === ytext && headAbs.type === ytext) {
+            // Awareness state comes from other peers: never trust it inside CSS
             const user = state.user || {};
-            const color = user.color || '#38bdf8';
-            const name = user.name || 'Collaborator';
+            const color = sanitizeCssColor(user.color);
+            const name = escapeCssString(typeof user.name === 'string' && user.name ? user.name : 'Collaborator');
+            if (!Number.isInteger(clientID)) return;
 
             // Inject or update dynamic peer CSS style
             const styleId = `y-cursor-style-${clientID}`;
@@ -171,7 +174,7 @@ export class MonacoBinding {
                 pointer-events: none !important;
               }
               .yRemoteSelectionHead-${clientID}::after {
-                content: "${name.replace(/"/g, '\\"')}" !important;
+                content: "${name}" !important;
                 position: absolute !important;
                 top: -1.35em !important;
                 left: -2px !important;

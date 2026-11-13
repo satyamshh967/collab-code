@@ -29,8 +29,18 @@ export const RoomProvider = ({ children }) => {
   });
 
   const roomIdRef = useRef(null);
-  const usernameRef = useRef(null);
   roomIdRef.current = roomId;
+  // Active fallback poller for the current execution job (cancelled on new run/result/unmount)
+  const pollRef = useRef({ timer: null, jobId: null });
+  // Returns the live editor text; set by CodeEditor so runs never use debounced state
+  const codeGetterRef = useRef(null);
+
+  const stopPolling = useCallback(() => {
+    if (pollRef.current.timer) clearInterval(pollRef.current.timer);
+    pollRef.current = { timer: null, jobId: null };
+  }, []);
+
+  useEffect(() => stopPolling, [stopPolling]);
 
   useEffect(() => {
     if (!socket) return;
@@ -44,6 +54,8 @@ export const RoomProvider = ({ children }) => {
         setCode(data.code);
       }
       setIsInterviewRoom(data.isInterviewRoom || false);
+      setChatMessages(Array.isArray(data.chatMessages) ? data.chatMessages : []);
+      setSnapshots(Array.isArray(data.snapshots) ? data.snapshots : []);
 
       const foundUser = (data.users || []).find(u => u.socketId === socket.id);
       if (foundUser) {
@@ -66,11 +78,7 @@ export const RoomProvider = ({ children }) => {
       toast.success(`${user.username} joined the room`);
     };
 
-    const handleUserLeft = (userId) => {
-      // Handled via room:users
-    };
-
-    // Language changed by peer
+    // Language changed by a peer (the server doesn't echo our own change back)
     const handleLanguageChange = (newLanguage) => {
       setLanguage(newLanguage);
       toast(`Language switched to ${newLanguage}`, { icon: '🔄' });
@@ -84,7 +92,11 @@ export const RoomProvider = ({ children }) => {
     // Snapshot saved
     const handleSnapshotSaved = (snapshot) => {
       setSnapshots((prev) => [...prev, snapshot]);
-      toast.success('Snapshot saved');
+      toast.success(`Snapshot "${snapshot.label}" saved`);
+    };
+
+    const handleSnapshotRestored = ({ label, restoredBy }) => {
+      toast(`${restoredBy} restored snapshot "${label}"`, { icon: '⏪' });
     };
 
     // Real-time execution events
@@ -107,6 +119,7 @@ export const RoomProvider = ({ children }) => {
     };
 
     const handleExecutionResult = ({ jobId, status, output, error, exitCode, executionTime }) => {
+      if (pollRef.current.jobId === jobId) stopPolling();
       setExecutionState({
         jobId,
         status,
@@ -123,18 +136,6 @@ export const RoomProvider = ({ children }) => {
       }
     };
 
-    // Graceful socket reconnection handling
-    const handleReconnect = () => {
-      if (roomIdRef.current && usernameRef.current) {
-        console.log('[Socket] Reconnected, re-joining room:', roomIdRef.current);
-        socket.emit(SOCKET_EVENTS.JOIN_ROOM, {
-          roomId: roomIdRef.current,
-          username: usernameRef.current
-        });
-        toast.success('Reconnected to room');
-      }
-    };
-
     const handleError = (data) => {
       toast.error(data.message || 'An error occurred');
     };
@@ -142,46 +143,50 @@ export const RoomProvider = ({ children }) => {
     socket.on(SOCKET_EVENTS.ROOM_INFO, handleRoomInfo);
     socket.on(SOCKET_EVENTS.ROOM_USERS, handleUsers);
     socket.on(SOCKET_EVENTS.USER_JOINED, handleUserJoined);
-    socket.on(SOCKET_EVENTS.USER_LEFT, handleUserLeft);
     socket.on(SOCKET_EVENTS.LANGUAGE_CHANGE, handleLanguageChange);
     socket.on(SOCKET_EVENTS.CHAT_MESSAGE, handleChatMessage);
     socket.on(SOCKET_EVENTS.SNAPSHOT_SAVED, handleSnapshotSaved);
+    socket.on(SOCKET_EVENTS.SNAPSHOT_RESTORED, handleSnapshotRestored);
     socket.on(SOCKET_EVENTS.ERROR, handleError);
 
     socket.on('execution:status', handleExecutionStatus);
     socket.on('execution:output', handleExecutionOutput);
     socket.on('execution:result', handleExecutionResult);
-    socket.on('reconnect', handleReconnect);
 
     return () => {
       socket.off(SOCKET_EVENTS.ROOM_INFO, handleRoomInfo);
       socket.off(SOCKET_EVENTS.ROOM_USERS, handleUsers);
       socket.off(SOCKET_EVENTS.USER_JOINED, handleUserJoined);
-      socket.off(SOCKET_EVENTS.USER_LEFT, handleUserLeft);
       socket.off(SOCKET_EVENTS.LANGUAGE_CHANGE, handleLanguageChange);
       socket.off(SOCKET_EVENTS.CHAT_MESSAGE, handleChatMessage);
       socket.off(SOCKET_EVENTS.SNAPSHOT_SAVED, handleSnapshotSaved);
+      socket.off(SOCKET_EVENTS.SNAPSHOT_RESTORED, handleSnapshotRestored);
       socket.off(SOCKET_EVENTS.ERROR, handleError);
 
       socket.off('execution:status', handleExecutionStatus);
       socket.off('execution:output', handleExecutionOutput);
       socket.off('execution:result', handleExecutionResult);
-      socket.off('reconnect', handleReconnect);
     };
-  }, [socket]);
+  }, [socket, stopPolling]);
 
+  // Rejoining after a reconnect is driven by RoomPage, which re-runs joinRoom
+  // whenever the socket's connected state flips back to true.
   const joinRoom = useCallback((id, username) => {
     setRoomId(id);
-    usernameRef.current = username;
     if (socket) {
       socket.emit(SOCKET_EVENTS.JOIN_ROOM, { roomId: id, username });
     }
   }, [socket]);
 
+  // Stable identity (reads roomId from a ref) so effects depending on it don't
+  // re-run on every room change and trigger a leave/join loop.
   const leaveRoom = useCallback(() => {
-    if (socket && roomId) {
-      socket.emit(SOCKET_EVENTS.LEAVE_ROOM, { roomId });
+    // While disconnected the server has already dropped us; a buffered leave
+    // would only be replayed after reconnect.
+    if (socket && socket.connected && roomIdRef.current) {
+      socket.emit(SOCKET_EVENTS.LEAVE_ROOM, { roomId: roomIdRef.current });
     }
+    stopPolling();
     setRoomId(null);
     setRoomInfo(null);
     setUsers([]);
@@ -189,7 +194,7 @@ export const RoomProvider = ({ children }) => {
     setChatMessages([]);
     setSnapshots([]);
     setCurrentUser(null);
-  }, [socket, roomId]);
+  }, [socket, stopPolling]);
 
   const updateCode = useCallback((newCode) => {
     setCode(newCode);
@@ -220,7 +225,13 @@ export const RoomProvider = ({ children }) => {
     }
   }, [socket, roomId]);
 
+  const registerCodeGetter = useCallback((getter) => {
+    codeGetterRef.current = getter;
+  }, []);
+
   const runCode = useCallback(async (currentCode, currentLang, stdin = '') => {
+    stopPolling();
+    const liveCode = codeGetterRef.current ? codeGetterRef.current() : currentCode;
     setExecutionState({
       jobId: null,
       status: 'queued',
@@ -231,7 +242,7 @@ export const RoomProvider = ({ children }) => {
     });
 
     try {
-      const res = await api.executeCode(currentCode, currentLang, roomId, stdin);
+      const res = await api.executeCode(liveCode, currentLang, roomId, stdin);
       setExecutionState((prev) => ({
         ...prev,
         jobId: res.jobId,
@@ -239,19 +250,21 @@ export const RoomProvider = ({ children }) => {
         output: `Job enqueued (Job ID: ${res.jobId})\nWaiting for worker...\n`
       }));
 
-      // Polling fallback in case WebSocket stream is delayed
+      // Polling fallback in case the WebSocket result is delayed or Redis is offline
       let attempts = 0;
       const pollTimer = setInterval(async () => {
         attempts++;
         if (attempts > 30) {
-          clearInterval(pollTimer);
+          if (pollRef.current.timer === pollTimer) stopPolling();
           return;
         }
 
         try {
           const statusRes = await api.getExecutionStatus(res.jobId);
+          // Ignore responses for a job that is no longer the active one
+          if (pollRef.current.jobId !== res.jobId) return;
           if (statusRes && (statusRes.status === 'completed' || statusRes.status === 'failed')) {
-            clearInterval(pollTimer);
+            stopPolling();
             setExecutionState({
               jobId: res.jobId,
               status: statusRes.status,
@@ -261,8 +274,11 @@ export const RoomProvider = ({ children }) => {
               executionTime: statusRes.executionTime || 0
             });
           }
-        } catch (e) {}
+        } catch (e) {
+          // Transient network error: keep polling until attempts run out
+        }
       }, 1000);
+      pollRef.current = { timer: pollTimer, jobId: res.jobId };
     } catch (err) {
       setExecutionState({
         jobId: null,
@@ -274,9 +290,10 @@ export const RoomProvider = ({ children }) => {
       });
       toast.error(err.message || 'Failed to submit execution request');
     }
-  }, [roomId]);
+  }, [roomId, stopPolling]);
 
   const clearExecutionOutput = useCallback(() => {
+    stopPolling();
     setExecutionState({
       jobId: null,
       status: 'idle',
@@ -285,13 +302,13 @@ export const RoomProvider = ({ children }) => {
       exitCode: null,
       executionTime: 0
     });
-  }, []);
+  }, [stopPolling]);
 
   return (
     <RoomContext.Provider value={{
       roomId, roomInfo, users, language, code, chatMessages, snapshots,
       isInterviewRoom, currentUser,
-      executionState, runCode, clearExecutionOutput,
+      executionState, runCode, clearExecutionOutput, registerCodeGetter,
       joinRoom, leaveRoom, updateCode,
       sendMessage, changeLanguage, saveSnapshot, restoreSnapshot
     }}>

@@ -56,13 +56,13 @@ services:
   client:
     build:
       context: ../client
+      # Baked into the bundle at build time (CRA ignores runtime env vars)
+      args:
+        REACT_APP_SERVER_URL: http://localhost:3001
+        REACT_APP_API_URL: http://localhost:3001/api
     container_name: collab-client
     ports:
       - "3000:80"
-    environment:
-      - REACT_APP_SERVER_URL=http://localhost:3001
-      - REACT_APP_API_URL=http://localhost:3001/api
-      - REACT_APP_WS_URL=ws://localhost:3001
     depends_on:
       - server
     networks:

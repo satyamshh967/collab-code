@@ -4,10 +4,10 @@ import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
 import { MonacoBinding } from '../../utils/y-monaco';
 import { useRoom } from '../../hooks/useRoom';
-import { EDITOR_OPTIONS, LANGUAGES } from '../../utils/constants';
+import { EDITOR_OPTIONS } from '../../utils/constants';
 
 const CodeEditor = () => {
-  const { roomId, language, updateCode, currentUser } = useRoom();
+  const { roomId, language, updateCode, currentUser, registerCodeGetter } = useRoom();
   const editorRef = useRef(null);
   const monacoRef = useRef(null);
   const bindingRef = useRef(null);
@@ -15,9 +15,10 @@ const CodeEditor = () => {
   const ydocRef = useRef(null);
   const [isEditorReady, setIsEditorReady] = useState(false);
 
-  const defaultCode = LANGUAGES.find((l) => l.id === language)?.defaultCode || '';
   const updateCodeRef = useRef(updateCode);
   updateCodeRef.current = updateCode;
+  const registerCodeGetterRef = useRef(registerCodeGetter);
+  registerCodeGetterRef.current = registerCodeGetter;
 
   const handleEditorDidMount = (editor, monaco) => {
     editorRef.current = editor;
@@ -77,14 +78,13 @@ const CodeEditor = () => {
     );
     bindingRef.current = binding;
 
-    // Populate initial default code ONLY IF the room document is completely empty after sync
-    provider.on('synced', (isSynced) => {
-      if (isSynced && yText.length === 0 && defaultCode) {
-        ydoc.transact(() => {
-          yText.insert(0, defaultCode);
-        });
-      }
-      if (updateCodeRef.current) {
+    // Let "Run" read the live document instead of the debounced context copy
+    registerCodeGetterRef.current?.(() => yText.toString());
+
+    // The server seeds new rooms with starter code, so the client never inserts
+    // it (two clients doing so concurrently would duplicate the snippet).
+    provider.on('sync', (isSynced) => {
+      if (isSynced && updateCodeRef.current) {
         updateCodeRef.current(yText.toString());
       }
     });
@@ -102,6 +102,7 @@ const CodeEditor = () => {
     yText.observe(observer);
 
     return () => {
+      registerCodeGetterRef.current?.(null);
       clearTimeout(debounceTimer);
       yText.unobserve(observer);
       if (provider.awareness) {

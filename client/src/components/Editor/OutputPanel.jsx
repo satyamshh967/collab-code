@@ -3,6 +3,7 @@ import { useRoom } from '../../hooks/useRoom';
 import { Play, Copy, Trash2, ChevronDown, ChevronUp, Check, Terminal } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { fireConfetti } from '../../utils/confetti';
+import { LANGUAGES, RUNNABLE_LANGUAGES } from '../../utils/constants';
 
 const OutputPanel = () => {
   const { code, language, executionState, runCode, clearExecutionOutput } = useRoom();
@@ -32,22 +33,32 @@ const OutputPanel = () => {
     return () => clearInterval(timerRef.current);
   }, [isRunning, status, exitCode]);
 
-  const handleRun = useCallback(() => {
-    runCode(code, language);
-  }, [code, language, runCode]);
+  const canRun = RUNNABLE_LANGUAGES.has(language);
+  const languageName = LANGUAGES.find((l) => l.id === language)?.name || language;
 
-  // Global Ctrl+Enter / Cmd+Enter keyboard shortcut to Run Code
+  const handleRun = useCallback(() => {
+    if (!canRun) {
+      toast.error(`Running ${languageName} isn't supported yet. Try JavaScript, Python or Java.`);
+      return;
+    }
+    runCode(code, language);
+  }, [code, language, runCode, canRun, languageName]);
+
+  // Global Ctrl+Enter / Cmd+Enter keyboard shortcut to Run Code. Registered in
+  // the capture phase so it fires before Monaco, which otherwise consumes
+  // Ctrl+Enter ("insert line below") when the editor has focus.
   useEffect(() => {
     const handleKeyDown = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
+        e.stopPropagation();
         if (!isRunning) {
           handleRun();
         }
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [isRunning, handleRun]);
 
   const handleCopyOutput = async () => {
@@ -164,16 +175,20 @@ const OutputPanel = () => {
           <button
             className="btn btn-primary"
             onClick={handleRun}
-            disabled={isRunning}
+            disabled={isRunning || !canRun}
             style={{
               padding: '0.25rem 0.75rem',
               fontSize: '11px',
               borderRadius: '5px',
               display: 'inline-flex',
               alignItems: 'center',
-              gap: '5px'
+              gap: '5px',
+              opacity: canRun ? 1 : 0.5,
+              cursor: canRun ? 'pointer' : 'not-allowed'
             }}
-            title="Run Code in sandboxed container (Ctrl+Enter)"
+            title={canRun
+              ? 'Run Code in sandboxed container (Ctrl+Enter)'
+              : `Running ${languageName} isn't supported yet (JavaScript, Python and Java can run)`}
           >
             {isRunning ? (
               <>
