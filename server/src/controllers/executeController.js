@@ -1,3 +1,4 @@
+import { sanitizeInput } from '../utils/helpers.js';
 import { enqueueExecution, getJobStatus } from '../queue/executionQueue.js';
 
 // Only languages the execution service can actually run. Keep in sync with
@@ -11,7 +12,7 @@ const MAX_STDIN_LENGTH = 64 * 1024;
  */
 export const executeCode = async (req, res) => {
   try {
-    const { code, language, stdin = '', roomId = null, userId = null } = req.body || {};
+    const { code, language, stdin = '', roomId = null, userId = null, runBy = null } = req.body || {};
 
     if (typeof code !== 'string' || !code.trim() || typeof language !== 'string' || !language) {
       return res.status(400).json({ error: 'Code and language are required fields' });
@@ -31,22 +32,30 @@ export const executeCode = async (req, res) => {
     }
 
     const safeRoomId = typeof roomId === 'string' && roomId ? roomId : null;
+    const safeRunBy = sanitizeInput(typeof runBy === 'string' ? runBy : '').slice(0, 32) || null;
+    const roomChannel = req.io && safeRoomId ? req.io.to(safeRoomId) : null;
 
     const job = await enqueueExecution({
       code,
       language: normalizedLanguage,
       stdin,
       roomId: safeRoomId,
-      userId: typeof userId === 'string' ? userId : null
+      userId: typeof userId === 'string' ? userId : null,
+      // Standalone mode (no Redis worker): broadcast progress to the room
+      // directly so collaborators see the run, not just the person polling.
+      onEvent: roomChannel
+        ? (type, data) => roomChannel.emit(`execution:${type}`, data)
+        : null
     });
 
     // Notify room that execution has been triggered
-    if (req.io && safeRoomId) {
-      req.io.to(safeRoomId).emit('execution:status', {
+    if (roomChannel) {
+      roomChannel.emit('execution:status', {
         jobId: job.jobId,
         status: 'queued',
         language: normalizedLanguage,
-        roomId: safeRoomId
+        roomId: safeRoomId,
+        runBy: safeRunBy
       });
     }
 

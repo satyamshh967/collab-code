@@ -18,14 +18,32 @@ export default (io, socket) => {
     socket.to(roomId).emit('editor:change', { code, socketId: socket.id });
   });
 
-  socket.on('editor:language-change', (payload) => {
+  socket.on('editor:language-change', async (payload) => {
     const { roomId, language } = payload || {};
     const member = getMembership(socket, roomId);
     if (!member || typeof language !== 'string' || !Object.hasOwn(DEFAULT_SNIPPETS, language)) return;
-    if (member.room.language === language) return;
+    const previous = member.room.language;
+    if (previous === language) return;
     member.room.language = language;
     // Tell everyone else; the sender already switched locally
     socket.to(roomId).emit('editor:language-change', language);
+
+    // If nobody has touched the starter code yet (or the file is empty), swap
+    // in the new language's starter so the room is immediately runnable.
+    try {
+      const current = getDocText(roomId).trim();
+      const untouched = current === '' || Object.values(DEFAULT_SNIPPETS).some((s) => s.trim() === current);
+      if (untouched) {
+        const ydoc = await getYDoc(roomId);
+        const yText = ydoc.getText('monaco');
+        ydoc.transact(() => {
+          yText.delete(0, yText.length);
+          yText.insert(0, DEFAULT_SNIPPETS[language]);
+        });
+      }
+    } catch (err) {
+      console.warn(`[Editor] Failed to swap starter code in ${roomId}:`, err.message);
+    }
   });
 
   socket.on('editor:save-snapshot', (payload) => {

@@ -1,5 +1,8 @@
 import { formatTimestamp } from '../utils/helpers.js';
 
+const DEFAULT_INTERVIEW_MS = 45 * 60 * 1000;
+const MAX_INTERVIEW_MS = 3 * 60 * 60 * 1000;
+
 class Room {
   constructor(id, name, language, isInterviewRoom = false, interviewConfig = null) {
     this.id = id;
@@ -17,6 +20,30 @@ class Room {
       timeLimit: 0,
       startedAt: null
     };
+    // Shared interview clock. Every client derives "time left" from these
+    // server timestamps, so all participants see the same countdown.
+    this.interview = isInterviewRoom
+      ? { startedAt: null, durationMs: DEFAULT_INTERVIEW_MS, endedAt: null }
+      : null;
+  }
+
+  /** Start the interview clock when the first participant arrives. */
+  ensureInterviewStarted() {
+    if (this.interview && !this.interview.startedAt) {
+      this.interview.startedAt = Date.now();
+    }
+  }
+
+  extendInterview(ms) {
+    if (!this.interview || this.interview.endedAt) return false;
+    this.interview.durationMs = Math.min(this.interview.durationMs + ms, MAX_INTERVIEW_MS);
+    return true;
+  }
+
+  endInterview() {
+    if (!this.interview || this.interview.endedAt) return false;
+    this.interview.endedAt = Date.now();
+    return true;
   }
 
   addUser(user) {

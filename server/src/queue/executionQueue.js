@@ -88,7 +88,7 @@ export const getExecutionQueue = async () => {
 /**
  * Enqueue code execution job
  */
-export const enqueueExecution = async ({ code, language, stdin = '', roomId = null, userId = null }) => {
+export const enqueueExecution = async ({ code, language, stdin = '', roomId = null, userId = null, onEvent = null }) => {
   const isRedisUp = await checkRedisHealth();
   const queue = await getExecutionQueue();
 
@@ -119,10 +119,25 @@ export const enqueueExecution = async ({ code, language, stdin = '', roomId = nu
     roomId
   });
 
-  // Asynchronously execute in background to preserve non-blocking decoupled contract
-  (async () => {
+  // In standalone mode there is no worker publishing events, so report
+  // progress through the caller's callback (used to broadcast to the room).
+  const emit = (type, data) => {
+    try {
+      onEvent?.(type, { jobId, roomId, ...data });
+    } catch (e) {
+      // Broadcasting is best-effort; the job store remains the source of truth
+    }
+  };
+  const finish = (record) => {
+    finishLocalJob(jobId, record);
+    emit('result', record);
+  };
+
+  // Execute in the background, after the caller has announced the job as queued
+  setImmediate(async () => {
     try {
       localJobStore.set(jobId, { ...localJobStore.get(jobId), status: 'running' });
+      emit('status', { status: 'running' });
 
       let result;
       try {
@@ -148,7 +163,7 @@ export const enqueueExecution = async ({ code, language, stdin = '', roomId = nu
         }
       }
 
-      finishLocalJob(jobId, {
+      finish({
         status: result.exitCode === 0 ? 'completed' : 'failed',
         output: result.output || '',
         error: result.error || '',
@@ -156,7 +171,7 @@ export const enqueueExecution = async ({ code, language, stdin = '', roomId = nu
         executionTime: result.executionTime || 0
       });
     } catch (err) {
-      finishLocalJob(jobId, {
+      finish({
         status: 'failed',
         output: '',
         error: err.message || 'Execution failed',
@@ -164,7 +179,7 @@ export const enqueueExecution = async ({ code, language, stdin = '', roomId = nu
         executionTime: 0
       });
     }
-  })();
+  });
 
   return {
     jobId,

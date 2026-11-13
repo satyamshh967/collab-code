@@ -195,4 +195,89 @@ test('Real-time server integration', async (t) => {
     assert.strictEqual(general.headers.get('ratelimit-remaining') !== null, true);
     assert.ok(Number(general.headers.get('ratelimit-remaining')) > 100);
   });
+  await t.test('reactions are broadcast to everyone in the room and validated', async () => {
+    const a = await connectSocket();
+    const b = await connectSocket();
+    cleanups.push(() => a.close(), () => b.close());
+    await joinRoom(a, 'react-room', 'A');
+    await joinRoom(b, 'react-room', 'B');
+
+    const seen = [];
+    b.on('room:reaction', (r) => seen.push(r));
+    a.emit('room:reaction', { roomId: 'react-room', emoji: '<script>' }); // not allowed
+    a.emit('room:reaction', { roomId: 'react-room', emoji: '🔥' });
+    await waitFor(() => seen.length > 0, { message: 'reaction broadcast' });
+    await new Promise((r) => setTimeout(r, 100));
+    assert.deepStrictEqual(seen.map((r) => r.emoji), ['🔥']);
+    assert.strictEqual(seen[0].username, 'A');
+  });
+
+  await t.test('only the host can end or extend an interview, and everyone gets the update', async () => {
+    const created = await (await fetch(`${httpBase}/api/rooms`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Interview', language: 'python', isInterview: true })
+    })).json();
+
+    const host = await connectSocket();
+    const candidate = await connectSocket();
+    cleanups.push(() => host.close(), () => candidate.close());
+    const hostInfo = await joinRoom(host, created.id, 'Host');
+    assert.ok(hostInfo.interview?.startedAt, 'clock starts on first join');
+    const startDuration = hostInfo.interview.durationMs;
+    await joinRoom(candidate, created.id, 'Candidate');
+
+    const denied = new Promise((resolve) => candidate.once('error', resolve));
+    candidate.emit('interview:end', { roomId: created.id });
+    assert.match((await denied).message, /host/);
+
+    const extended = new Promise((resolve) => candidate.once('interview:update', resolve));
+    host.emit('interview:extend', { roomId: created.id });
+    assert.strictEqual((await extended).durationMs, startDuration + 10 * 60 * 1000);
+
+    const ended = new Promise((resolve) => candidate.once('interview:update', resolve));
+    host.emit('interview:end', { roomId: created.id });
+    assert.ok((await ended).endedAt);
+  });
+
+  await t.test('switching language replaces untouched starter code but keeps real work', async () => {
+    const socket = await connectSocket();
+    const editor = connectProvider('lang-room');
+    cleanups.push(() => socket.close(), () => editor.provider.destroy());
+    await joinRoom(socket, 'lang-room', 'Dev');
+    await waitFor(() => editor.provider.synced, { message: 'sync' });
+
+    socket.emit('editor:language-change', { roomId: 'lang-room', language: 'python' });
+    await waitFor(() => editor.text.toString() === 'print("Hello World!")\n', { message: 'starter swap' });
+
+    editor.text.insert(editor.text.length, 'print(42)\n');
+    await new Promise((r) => setTimeout(r, 100));
+    socket.emit('editor:language-change', { roomId: 'lang-room', language: 'java' });
+    await new Promise((r) => setTimeout(r, 200));
+    assert.ok(editor.text.toString().includes('print(42)'), 'edited code must never be replaced');
+  });
+
+  await t.test('in standalone mode, collaborators receive run status and results', async () => {
+    const runner = await connectSocket();
+    const watcher = await connectSocket();
+    cleanups.push(() => runner.close(), () => watcher.close());
+    await joinRoom(runner, 'run-room', 'Runner');
+    await joinRoom(watcher, 'run-room', 'Watcher');
+
+    const statuses = [];
+    watcher.on('execution:status', (s) => statuses.push(s));
+    const result = new Promise((resolve) => watcher.once('execution:result', resolve));
+
+    await fetch(`${httpBase}/api/execute`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: 'console.log(1 + 1)', language: 'javascript', roomId: 'run-room', runBy: 'Runner' })
+    });
+
+    const final = await result;
+    assert.strictEqual(final.status, 'completed');
+    assert.strictEqual(final.output, '2');
+    assert.deepStrictEqual(statuses.map((s) => s.status), ['queued', 'running']);
+    assert.strictEqual(statuses[0].runBy, 'Runner');
+  });
 });

@@ -3,6 +3,7 @@ import User, { userManager } from '../models/User.js';
 import { snapshotManager } from '../models/CodeSnapshot.js';
 import { generateId, generateColor, formatTimestamp, sanitizeInput } from '../utils/helpers.js';
 import { getDocText, persistYDoc, docs } from '../yjs/persistence.js';
+import { getMembership } from './membership.js';
 
 // Timers for scheduled room cleanups when all users leave
 const roomCleanupTimers = new Map();
@@ -12,6 +13,15 @@ const ROOM_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 const MAX_USERNAME_LENGTH = 32;
 
 export const isValidRoomId = (roomId) => typeof roomId === 'string' && ROOM_ID_PATTERN.test(roomId);
+
+const ALLOWED_REACTIONS = new Set(['🔥', '🚀', '🎉', '❤️', '👏', '🧠', '💡', '🐛', '👀', '✅']);
+const REACTION_COOLDOWN_MS = 300;
+const INTERVIEW_EXTENSION_MS = 10 * 60 * 1000;
+
+// serverNow lets clients correct for clock skew when rendering the countdown
+const interviewPayload = (room) => (room.interview
+  ? { ...room.interview, serverNow: Date.now() }
+  : null);
 
 const systemMessage = (text) => ({
   id: generateId(),
@@ -89,6 +99,7 @@ export default (io, socket) => {
     userManager.addUser(user);
 
     socket.join(roomId);
+    room.ensureInterviewStarted();
 
     socket.emit('room:info', {
       id: room.id,
@@ -97,6 +108,7 @@ export default (io, socket) => {
       code: getDocText(roomId) || room.code,
       users: Array.from(room.users.values()),
       isInterviewRoom: room.isInterviewRoom,
+      interview: interviewPayload(room),
       chatMessages: room.chatMessages,
       snapshots: snapshotManager.getSnapshots(roomId)
     });
@@ -113,6 +125,46 @@ export default (io, socket) => {
   socket.on('heartbeat:ping', () => {
     socket.emit('heartbeat:pong', { timestamp: Date.now() });
   });
+
+  // Emoji reactions are broadcast so every participant sees the burst
+  let lastReactionAt = 0;
+  socket.on('room:reaction', (payload) => {
+    const { roomId, emoji } = payload || {};
+    const member = getMembership(socket, roomId);
+    if (!member || !ALLOWED_REACTIONS.has(emoji)) return;
+    const now = Date.now();
+    if (now - lastReactionAt < REACTION_COOLDOWN_MS) return;
+    lastReactionAt = now;
+    io.to(roomId).emit('room:reaction', {
+      emoji,
+      userId: member.user.id,
+      username: member.user.username,
+      color: member.user.color
+    });
+  });
+
+  // Interview controls are restricted to the room owner (the interviewer)
+  const handleInterviewControl = (action) => (payload) => {
+    const member = getMembership(socket, payload?.roomId);
+    if (!member || !member.room.interview) return;
+    if (!member.user.isOwner) {
+      socket.emit('error', { message: 'Only the room host can control the interview timer' });
+      return;
+    }
+    const changed = action === 'end'
+      ? member.room.endInterview()
+      : member.room.extendInterview(INTERVIEW_EXTENSION_MS);
+    if (!changed) return;
+
+    io.to(member.room.id).emit('interview:update', interviewPayload(member.room));
+    const msg = systemMessage(action === 'end'
+      ? `${member.user.username} ended the interview`
+      : `${member.user.username} added 10 minutes to the interview`);
+    member.room.addChatMessage(msg);
+    io.to(member.room.id).emit('chat:message', msg);
+  };
+  socket.on('interview:end', handleInterviewControl('end'));
+  socket.on('interview:extend', handleInterviewControl('extend'));
 
   socket.on('room:leave', leaveCurrentRoom);
   socket.on('disconnect', leaveCurrentRoom);
